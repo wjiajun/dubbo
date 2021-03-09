@@ -73,6 +73,7 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
      * Close all created registries
      */
     public static void destroyAll() {
+        // 忽略，若已经销毁
         if (!destroyed.compareAndSet(false, true)) {
             return;
         }
@@ -80,6 +81,7 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Close all registries " + getRegistries());
         }
+        // 等到服务消费，接收到注册中心通知到该服务提供者已经下线，加大了在不重试情况下优雅停机的成功率。
         // Lock up the registry shutdown process
         LOCK.lock();
         try {

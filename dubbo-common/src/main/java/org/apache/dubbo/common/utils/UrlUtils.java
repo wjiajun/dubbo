@@ -161,6 +161,10 @@ public class UrlUtils {
         return u;
     }
 
+    // 解析单个URL，将'default'里面的参数合并到default中
+    // 合并逻辑：
+    //    把`address`认为是url，`default`认为是default URL。
+    //    若url有不存在的属性时，从defaultURL获取对应的属性，设置到URL中。
     public static List<URL> parseURLs(String address, Map<String, String> defaults) {
         if (address == null || address.length() == 0) {
             return null;
@@ -422,6 +426,7 @@ public class UrlUtils {
     }
 
     public static boolean isMatchGlobPattern(String pattern, String value, URL param) {
+        // 以美元符 `$` 开头，表示引用参数
         if (param != null && pattern.startsWith("$")) {
             pattern = param.getRawParameter(pattern.substring(1));
         }
@@ -429,16 +434,20 @@ public class UrlUtils {
     }
 
     public static boolean isMatchGlobPattern(String pattern, String value) {
+        // 全匹配
         if ("*".equals(pattern)) {
             return true;
         }
+        // 全部为空，匹配
         if (StringUtils.isEmpty(pattern) && StringUtils.isEmpty(value)) {
             return true;
         }
+        // 有一个为空，不匹配
         if (StringUtils.isEmpty(pattern) || StringUtils.isEmpty(value)) {
             return false;
         }
 
+        // 支持 * 的通配
         int i = pattern.lastIndexOf('*');
         // doesn't find "*"
         if (i == -1) {

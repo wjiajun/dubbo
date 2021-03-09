@@ -40,7 +40,11 @@ import static org.apache.dubbo.rpc.protocol.dubbo.Constants.LAZY_CONNECT_INITIAL
 @SuppressWarnings("deprecation")
 final class ReferenceCountExchangeClient implements ExchangeClient {
 
+    /**
+     * URL
+     */
     private final URL url;
+    // 指向计数
     private final AtomicInteger referenceCount = new AtomicInteger(0);
 
     private ExchangeClient client;
@@ -193,6 +197,7 @@ final class ReferenceCountExchangeClient implements ExchangeClient {
         /**
          * the order of judgment in the if statement cannot be changed.
          */
+        // 创建 LazyConnectExchangeClient 对象，若不存在。
         if (!(client instanceof LazyConnectExchangeClient) || client.isClosed()) {
             client = new LazyConnectExchangeClient(lazyUrl, client.getExchangeHandler());
         }

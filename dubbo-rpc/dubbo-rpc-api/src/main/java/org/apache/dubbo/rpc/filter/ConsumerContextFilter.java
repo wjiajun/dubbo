@@ -45,6 +45,7 @@ public class ConsumerContextFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 设置 RpcContext 对象
         RpcContext context = RpcContext.getContext();
         context.setInvoker(invoker)
                 .setInvocation(invocation)
@@ -52,6 +53,7 @@ public class ConsumerContextFilter implements Filter {
                 .setRemoteAddress(invoker.getUrl().getHost(), invoker.getUrl().getPort())
                 .setRemoteApplicationName(invoker.getUrl().getParameter(REMOTE_APPLICATION_KEY))
                 .setAttachment(REMOTE_APPLICATION_KEY, invoker.getUrl().getParameter(APPLICATION_KEY));
+        // 设置 RpcInvocation 对象的 `invoker` 属性
         if (invocation instanceof RpcInvocation) {
             ((RpcInvocation) invocation).setInvoker(invoker);
         }
@@ -66,6 +68,7 @@ public class ConsumerContextFilter implements Filter {
                                 + invocation.getMethodName() + ", terminate directly."), invocation);
             }
         }
+        // 服务调用
         return invoker.invoke(invocation);
     }
 

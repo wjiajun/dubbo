@@ -38,8 +38,14 @@ public class RestMethodMetadata implements Serializable {
 
     private static final long serialVersionUID = 2935252016200830694L;
 
+    /**
+     * 方法元数据
+     */
     private MethodDefinition method;
 
+    /**
+     * 请求元数据
+     */
     private RequestMetadata request;
 
     private Integer urlIndex;

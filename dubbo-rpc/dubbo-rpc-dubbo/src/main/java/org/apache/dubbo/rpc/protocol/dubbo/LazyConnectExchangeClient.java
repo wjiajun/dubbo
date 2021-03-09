@@ -51,6 +51,9 @@ final class LazyConnectExchangeClient implements ExchangeClient {
     private final static Logger logger = LoggerFactory.getLogger(LazyConnectExchangeClient.class);
     protected final boolean requestWithWarning;
     private final URL url;
+    /**
+     * 通道处理器
+     */
     private final ExchangeHandler requestHandler;
     private final Lock connectLock = new ReentrantLock();
     private final int warning_period = 5000;
@@ -59,6 +62,9 @@ final class LazyConnectExchangeClient implements ExchangeClient {
      */
     private final boolean initialState;
     private volatile ExchangeClient client;
+    /**
+     * 警告计数器。每超过一定次数，打印告警日志。
+     */
     private AtomicLong warningcount = new AtomicLong(0);
 
     public LazyConnectExchangeClient(URL url, ExchangeHandler requestHandler) {
@@ -81,6 +87,7 @@ final class LazyConnectExchangeClient implements ExchangeClient {
             if (client != null) {
                 return;
             }
+            // 创建 Client ，连接服务器
             this.client = Exchangers.connect(url, requestHandler);
         } finally {
             connectLock.unlock();
@@ -149,7 +156,7 @@ final class LazyConnectExchangeClient implements ExchangeClient {
 
     @Override
     public boolean isConnected() {
-        if (client == null) {
+        if (client == null) {// 客户端未初始化
             return initialState;
         } else {
             return client.isConnected();

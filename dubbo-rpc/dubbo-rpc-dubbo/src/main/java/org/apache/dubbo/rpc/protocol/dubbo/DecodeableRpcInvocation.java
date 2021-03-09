@@ -49,18 +49,28 @@ import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
 import static org.apache.dubbo.rpc.protocol.dubbo.CallbackServiceCodec.decodeInvocationArgument;
 
+// 当服务消费者，调用服务提供者，前者编码的 RpcInvocation 对象，后者解码成 DecodeableRpcInvocation 对象
 public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Decodeable {
 
     private static final Logger log = LoggerFactory.getLogger(DecodeableRpcInvocation.class);
 
+    /**
+     * 通道
+     */
     private Channel channel;
 
+    /**
+     * Serialization 类型编号
+     */
     private byte serializationType;
 
     private InputStream inputStream;
 
     private Request request;
 
+    /**
+     * 是否已经解码完成
+     */
     private volatile boolean hasDecoded;
 
     public DecodeableRpcInvocation(Channel channel, Request request, InputStream is, byte id) {
@@ -100,6 +110,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
         ObjectInput in = CodecSupport.getSerialization(channel.getUrl(), serializationType)
                 .deserialize(channel.getUrl(), input);
 
+        // 解码 `dubbo` `path` `version`
         String dubboVersion = in.readUTF();
         request.setVersion(dubboVersion);
         setAttachment(DUBBO_VERSION_KEY, dubboVersion);
@@ -108,6 +119,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
         setAttachment(PATH_KEY, path);
         setAttachment(VERSION_KEY, in.readUTF());
 
+        // 解码方法、方法签名、方法参数集合
         setMethodName(in.readUTF());
 
         String desc = in.readUTF();
@@ -150,6 +162,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
             }
             setParameterTypes(pts);
 
+            // 解码隐式传参集合
             Map<String, Object> map = in.readAttachments();
             if (map != null && map.size() > 0) {
                 Map<String, Object> attachment = getObjectAttachments();

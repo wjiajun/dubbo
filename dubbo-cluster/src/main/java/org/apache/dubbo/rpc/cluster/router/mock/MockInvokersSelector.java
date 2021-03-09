@@ -45,6 +45,7 @@ public class MockInvokersSelector extends AbstractRouter {
     @Override
     public <T> List<Invoker<T>> route(final List<Invoker<T>> invokers,
                                       URL url, final Invocation invocation) throws RpcException {
+        // 获得普通 Invoker 集合
         if (CollectionUtils.isEmpty(invokers)) {
             return invokers;
         }
@@ -52,20 +53,26 @@ public class MockInvokersSelector extends AbstractRouter {
         if (invocation.getObjectAttachments() == null) {
             return getNormalInvokers(invokers);
         } else {
+            // 获得 "invocation.need.mock" 配置项
             String value = (String) invocation.getObjectAttachments().get(INVOCATION_NEED_MOCK);
+            // 获得普通 Invoker 集合
             if (value == null) {
                 return getNormalInvokers(invokers);
+            // 获得 MockInvoker 集合
             } else if (Boolean.TRUE.toString().equalsIgnoreCase(value)) {
                 return getMockedInvokers(invokers);
             }
         }
+        // 其它，不匹配，直接返回 `invokers` 集合
         return invokers;
     }
 
     private <T> List<Invoker<T>> getMockedInvokers(final List<Invoker<T>> invokers) {
+        // 不包含 MockInvoker 的情况下，直接返回 null
         if (!hasMockProviders(invokers)) {
             return null;
         }
+        // 过滤掉普通 kInvoker ，创建 MockInvoker 集合
         List<Invoker<T>> sInvokers = new ArrayList<Invoker<T>>(1);
         for (Invoker<T> invoker : invokers) {
             if (invoker.getUrl().getProtocol().equals(MOCK_PROTOCOL)) {
@@ -76,9 +83,11 @@ public class MockInvokersSelector extends AbstractRouter {
     }
 
     private <T> List<Invoker<T>> getNormalInvokers(final List<Invoker<T>> invokers) {
+        // 不包含 MockInvoker 的情况下，直接返回 `invokers` 集合
         if (!hasMockProviders(invokers)) {
             return invokers;
         } else {
+            // 若包含 MockInvoker 的情况下，过滤掉 MockInvoker ，创建普通 Invoker 集合
             List<Invoker<T>> sInvokers = new ArrayList<Invoker<T>>(invokers.size());
             for (Invoker<T> invoker : invokers) {
                 if (!invoker.getUrl().getProtocol().equals(MOCK_PROTOCOL)) {

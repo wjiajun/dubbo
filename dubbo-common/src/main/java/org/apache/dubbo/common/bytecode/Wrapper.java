@@ -104,6 +104,7 @@ public abstract class Wrapper {
      * @return Wrapper instance(not null).
      */
     public static Wrapper getWrapper(Class<?> c) {
+        // 判断是否继承 ClassGenerator.DC.class ，如果是，拿到父类，避免重复包装
         while (ClassGenerator.isDynamicClass(c)) // can not wrapper on dynamic class.
         {
             c = c.getSuperclass();
@@ -113,6 +114,7 @@ public abstract class Wrapper {
             return OBJECT_WRAPPER;
         }
 
+        // 从缓存中获得 Wrapper 对象
         return WRAPPER_MAP.computeIfAbsent(c, key -> makeWrapper(key));
     }
 
@@ -443,7 +445,7 @@ public abstract class Wrapper {
     /**
      * invoke method.
      *
-     * @param instance instance.
+     * @param instance instance.  被调用的对象
      * @param mn       method name.
      * @param types
      * @param args     argument array.

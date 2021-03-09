@@ -67,19 +67,43 @@ public class AccessLogFilter implements Filter {
 
     private static final Logger logger = LoggerFactory.getLogger(AccessLogFilter.class);
 
+    /**
+     * 访问日志在 {@link LoggerFactory} 中的日志名
+     */
     private static final String LOG_KEY = "dubbo.accesslog";
 
+    /**
+     * 队列大小，即 {@link #logQueue} 值的大小
+     */
     private static final int LOG_MAX_BUFFER = 5000;
 
+    /**
+     * 日志输出频率，单位：毫秒。仅适用于 {@link #logFuture}
+     */
     private static final long LOG_OUTPUT_INTERVAL = 5000;
 
+    /**
+     * 访问日志的文件后缀
+     */
     private static final String FILE_DATE_FORMAT = "yyyyMMdd";
 
     // It's safe to declare it as singleton since it runs on single thread only
+    /**
+     * 日历的时间格式化
+     */
     private static final DateFormat FILE_NAME_FORMATTER = new SimpleDateFormat(FILE_DATE_FORMAT);
 
+    /**
+     * 日志队列
+     *
+     * key：访问日志名
+     * value：日志集合
+     */
     private static final Map<String, Set<AccessLogData>> LOG_ENTRIES = new ConcurrentHashMap<>();
 
+    /**
+     * 定时任务线程池
+     */
     private static final ScheduledExecutorService LOG_SCHEDULED = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-Access-Log", true));
 
     /**
@@ -101,6 +125,7 @@ public class AccessLogFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation inv) throws RpcException {
         try {
+            // 记录访问日志的文件名
             String accessLogKey = invoker.getUrl().getParameter(ACCESS_LOG_KEY);
             if (ConfigUtils.isNotEmpty(accessLogKey)) {
                 AccessLogData logData = buildAccessLogData(invoker, inv);
@@ -112,6 +137,12 @@ public class AccessLogFilter implements Filter {
         return invoker.invoke(inv);
     }
 
+    /**
+     * 添加日志内容到日志队列
+     *
+     * @param accessLog 日志文件
+     * @param accessLogData 日志内容
+     */
     private void log(String accessLog, AccessLogData accessLogData) {
         Set<AccessLogData> logSet = LOG_ENTRIES.computeIfAbsent(accessLog, k -> new ConcurrentHashSet<>());
 

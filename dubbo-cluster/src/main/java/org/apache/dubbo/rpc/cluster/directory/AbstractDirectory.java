@@ -42,10 +42,21 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
     // logger
     private static final Logger logger = LoggerFactory.getLogger(AbstractDirectory.class);
 
+    /**
+     * 注册中心 URL
+     */
     private final URL url;
 
+    /**
+     * 是否已经销毁
+     */
     private volatile boolean destroyed = false;
 
+    /**
+     * 消费者 URL
+     *
+     * 若未显示调用 {@link #AbstractDirectory(URL, URL, List)} 构造方法，consumerUrl 等于 {@link #url}
+     */
     private volatile URL consumerUrl;
 
     protected RouterChain<T> routerChain;
@@ -83,6 +94,7 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
         return routerChain;
     }
 
+    // 设置 Router 数组
     public void setRouterChain(RouterChain<T> routerChain) {
         this.routerChain = routerChain;
     }

@@ -36,6 +36,8 @@ public class ReconnectTimerTask extends AbstractTimerTask {
         this.idleTimeout = idleTimeout;
     }
 
+    // 根据客户端、服务端类型来对连接做不同的处理，当超过设置的心跳总时间之后，客户端选择的是重新连接，服务端则是选择直接断开连接。
+    // 这样的考虑是合理的，客户端调用是强依赖可用连接的，而服务端可以等待客户端重新建立连接
     @Override
     protected void doTask(Channel channel) {
         try {

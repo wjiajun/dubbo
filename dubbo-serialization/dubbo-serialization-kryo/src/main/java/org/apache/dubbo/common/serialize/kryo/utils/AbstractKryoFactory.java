@@ -59,10 +59,19 @@ import java.util.regex.Pattern;
 
 public abstract class AbstractKryoFactory implements KryoFactory {
 
+    /**
+     * 需要注册的类的集合
+     */
     private final Set<Class> registrations = new LinkedHashSet<Class>();
 
+    /**
+     * 是否开启注册行为
+     */
     private boolean registrationRequired;
 
+    /**
+     * Kryo 是否已经创建
+     */
     private volatile boolean kryoCreated;
 
     public AbstractKryoFactory() {
@@ -84,10 +93,12 @@ public abstract class AbstractKryoFactory implements KryoFactory {
 
     @Override
     public Kryo create() {
+        // 标记已创建
         if (!kryoCreated) {
             kryoCreated = true;
         }
 
+        // 创建 CompatibleKryo 对象
         Kryo kryo = new CompatibleKryo();
 
         // TODO
@@ -95,6 +106,7 @@ public abstract class AbstractKryoFactory implements KryoFactory {
         kryo.setRegistrationRequired(registrationRequired);
 
         kryo.addDefaultSerializer(Throwable.class, new JavaSerializer());
+        // 注册常用类
         kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
         kryo.register(GregorianCalendar.class, new GregorianCalendarSerializer());
         kryo.register(InvocationHandler.class, new JdkProxySerializer());
@@ -107,6 +119,7 @@ public abstract class AbstractKryoFactory implements KryoFactory {
         UnmodifiableCollectionsSerializer.registerSerializers(kryo);
         SynchronizedCollectionsSerializer.registerSerializers(kryo);
 
+        // 注册常用数据结构
         // now just added some very common classes
         // TODO optimization
         kryo.register(HashMap.class);
@@ -137,6 +150,7 @@ public abstract class AbstractKryoFactory implements KryoFactory {
             kryo.register(clazz);
         }
 
+        // SerializableClassRegistry 的注册
         SerializableClassRegistry.getRegisteredClasses().forEach((clazz, ser) -> {
             if (ser == null) {
                 kryo.register(clazz);

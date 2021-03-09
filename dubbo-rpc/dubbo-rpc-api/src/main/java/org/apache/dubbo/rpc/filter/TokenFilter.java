@@ -42,8 +42,10 @@ public class TokenFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation inv)
             throws RpcException {
+        // 获得服务提供者配置的 Token 值
         String token = invoker.getUrl().getParameter(TOKEN_KEY);
         if (ConfigUtils.isNotEmpty(token)) {
+            // 从隐式参数中，获得 Token 值。
             Class<?> serviceType = invoker.getInterface();
             Map<String, Object> attachments = inv.getObjectAttachments();
             String remoteToken = (attachments == null ? null : (String) attachments.get(TOKEN_KEY));

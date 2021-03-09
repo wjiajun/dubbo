@@ -48,8 +48,18 @@ public class DefaultFuture extends CompletableFuture<Object> {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultFuture.class);
 
+    /**
+     * 通道集合
+     *
+     * key：请求编号
+     */
     private static final Map<Long, Channel> CHANNELS = new ConcurrentHashMap<>();
 
+    /**
+     * Future 集合
+     *
+     * key：请求编号
+     */
     private static final Map<Long, DefaultFuture> FUTURES = new ConcurrentHashMap<>();
 
     public static final Timer TIME_OUT_TIMER = new HashedWheelTimer(
@@ -58,11 +68,29 @@ public class DefaultFuture extends CompletableFuture<Object> {
             TimeUnit.MILLISECONDS);
 
     // invoke id.
+    /**
+     * 请求编号
+     */
     private final Long id;
+    /**
+     * 通道
+     */
     private final Channel channel;
+    /**
+     * 请求
+     */
     private final Request request;
+    /**
+     * 超时
+     */
     private final int timeout;
+    /**
+     * 创建开始时间
+     */
     private final long start = System.currentTimeMillis();
+    /**
+     * 发送请求时间
+     */
     private volatile long sent;
     private Timeout timeoutCheckTask;
 
@@ -120,6 +148,7 @@ public class DefaultFuture extends CompletableFuture<Object> {
         return FUTURES.get(id);
     }
 
+    // 通道集合。通过 #hasFuture(channel) 方法，判断通道是否有未结束的请求
     public static boolean hasFuture(Channel channel) {
         return CHANNELS.containsValue(channel);
     }
@@ -165,8 +194,10 @@ public class DefaultFuture extends CompletableFuture<Object> {
 
     public static void received(Channel channel, Response response, boolean timeout) {
         try {
+            // 移除 FUTURES
             DefaultFuture future = FUTURES.remove(response.getId());
             if (future != null) {
+                // 接收结果
                 Timeout t = future.timeoutCheckTask;
                 if (!timeout) {
                     // decrease Time
@@ -180,6 +211,7 @@ public class DefaultFuture extends CompletableFuture<Object> {
                         + (channel == null ? "" : ", channel: " + channel.getLocalAddress()
                         + " -> " + channel.getRemoteAddress()) + ", please check provider side for detailed result.");
             }
+        // 移除 CHANNELS
         } finally {
             CHANNELS.remove(response.getId());
         }
@@ -200,6 +232,7 @@ public class DefaultFuture extends CompletableFuture<Object> {
         this.cancel(true);
     }
 
+    // 唤醒
     private void doReceived(Response res) {
         if (res == null) {
             throw new IllegalStateException("response cannot be null");
@@ -216,6 +249,7 @@ public class DefaultFuture extends CompletableFuture<Object> {
         // to avoid endless waiting for whatever reason, notify caller thread to return.
         if (executor != null && executor instanceof ThreadlessExecutor) {
             ThreadlessExecutor threadlessExecutor = (ThreadlessExecutor) executor;
+            // 唤醒
             if (threadlessExecutor.isWaiting()) {
                 threadlessExecutor.notifyReturn(new IllegalStateException("The result has returned, but the biz thread is still waiting" +
                         " which is not an expected state, interrupt the thread manually by returning an exception."));

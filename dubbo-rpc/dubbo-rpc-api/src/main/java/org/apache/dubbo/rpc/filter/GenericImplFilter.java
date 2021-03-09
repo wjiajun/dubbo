@@ -60,6 +60,7 @@ public class GenericImplFilter implements Filter, Filter.Listener {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 获得 `generic` 配置项
         String generic = invoker.getUrl().getParameter(GENERIC_KEY);
         // calling a generic impl service
         if (isCallingGenericImpl(generic, invocation)) {
@@ -80,13 +81,17 @@ public class GenericImplFilter implements Filter, Filter.Listener {
                 types[i] = ReflectUtils.getName(parameterTypes[i]);
             }
 
+            // 泛化引用的调用
             Object[] args;
             if (ProtocolUtils.isBeanGenericSerialization(generic)) {
+                // `nativejava` ，校验方法参数都为 byte[]
                 args = new Object[arguments.length];
                 for (int i = 0; i < arguments.length; i++) {
+                    // `bean` ，校验方法参数为 JavaBeanDescriptor
                     args[i] = JavaBeanSerializeUtil.serialize(arguments[i], JavaBeanAccessor.METHOD);
                 }
             } else {
+                // `bean` ，校验方法参数为 JavaBeanDescriptor
                 args = PojoUtils.generalize(arguments);
             }
 
@@ -98,6 +103,7 @@ public class GenericImplFilter implements Filter, Filter.Listener {
             invocation2.setParameterTypes(GENERIC_PARAMETER_TYPES);
             invocation2.setParameterTypesDesc(GENERIC_PARAMETER_DESC);
             invocation2.setArguments(new Object[]{methodName, types, args});
+            // 通过隐式参数，传递 generic 配置项
             return invoker.invoke(invocation2);
         }
         // making a generic call to a normal service
@@ -119,6 +125,7 @@ public class GenericImplFilter implements Filter, Filter.Listener {
                 }
             }
 
+            // 通过隐式参数，传递 `generic` 配置项
             invocation.setAttachment(
                     GENERIC_KEY, invoker.getUrl().getParameter(GENERIC_KEY));
         }

@@ -45,6 +45,9 @@ final class NettyChannel extends AbstractChannel {
     /**
      * the cache for netty channel and dubbo channel
      */
+    /**
+     * 通道集合
+     */
     private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP = new ConcurrentHashMap<Channel, NettyChannel>();
     /**
      * netty channel
@@ -87,9 +90,9 @@ final class NettyChannel extends AbstractChannel {
         NettyChannel ret = CHANNEL_MAP.get(ch);
         if (ret == null) {
             NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
-            if (ch.isActive()) {
+            if (ch.isActive()) {// 连接中
                 nettyChannel.markActive(true);
-                ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);
+                ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);// 添加到 channelMap
             }
             if (ret == null) {
                 ret = nettyChannel;
@@ -104,7 +107,9 @@ final class NettyChannel extends AbstractChannel {
      * @param ch netty channel
      */
     static void removeChannelIfDisconnected(Channel ch) {
+        // 未连接
         if (ch != null && !ch.isActive()) {
+            // 移除出channelMap
             NettyChannel nettyChannel = CHANNEL_MAP.remove(ch);
             if (nettyChannel != null) {
                 nettyChannel.markActive(false);
@@ -153,18 +158,22 @@ final class NettyChannel extends AbstractChannel {
      */
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 检查连接状态
         // whether the channel is closed
         super.send(message, sent);
 
         boolean success = true;
         int timeout = 0;
         try {
+            // 发送消息
             ChannelFuture future = channel.writeAndFlush(message);
+            // 等待发送成功
             if (sent) {
                 // wait timeout ms
                 timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
                 success = future.await(timeout);
             }
+            // 若发生异常，抛出
             Throwable cause = future.cause();
             if (cause != null) {
                 throw cause;
@@ -173,6 +182,7 @@ final class NettyChannel extends AbstractChannel {
             removeChannelIfDisconnected(channel);
             throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + " to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
         }
+        // 发送失败，抛出异常
         if (!success) {
             throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + " to " + getRemoteAddress()
                     + "in timeout(" + timeout + "ms) limit");
@@ -181,21 +191,25 @@ final class NettyChannel extends AbstractChannel {
 
     @Override
     public void close() {
+        // 标记关闭
         try {
             super.close();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 移除连接
         try {
             removeChannelIfDisconnected(channel);
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 清空属性 attributes
         try {
             attributes.clear();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 关闭真正的通道 channel
         try {
             if (logger.isInfoEnabled()) {
                 logger.info("Close netty channel " + channel);

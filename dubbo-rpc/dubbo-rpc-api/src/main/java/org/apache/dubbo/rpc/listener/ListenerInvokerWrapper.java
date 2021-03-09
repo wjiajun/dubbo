@@ -30,11 +30,15 @@ import java.util.List;
 
 /**
  * ListenerInvoker
+ * 目的是为了 InvokerListener 的触发，目前该监听器只有 #referred(invoker) #destroyed(invoker) 两个接口方法，并未对 #invoke(invocation) 的过程，实现监听
  */
 public class ListenerInvokerWrapper<T> implements Invoker<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(ListenerInvokerWrapper.class);
 
+    /**
+     * 真实的 Invoker 对象
+     */
     private final Invoker<T> invoker;
 
     private final List<InvokerListener> listeners;
@@ -45,6 +49,7 @@ public class ListenerInvokerWrapper<T> implements Invoker<T> {
         }
         this.invoker = invoker;
         this.listeners = listeners;
+        // 执行监听器
         if (CollectionUtils.isNotEmpty(listeners)) {
             for (InvokerListener listener : listeners) {
                 if (listener != null) {

@@ -53,11 +53,13 @@ public class Main {
 
     public static void main(String[] args) {
         try {
+            // 若 main 函数参数传入为空，从配置中加载。
             if (ArrayUtils.isEmpty(args)) {
                 String config = ConfigUtils.getProperty(CONTAINER_KEY, LOADER.getDefaultExtensionName());
                 args = COMMA_SPLIT_PATTERN.split(config);
             }
 
+            // 加载容器数组
             final List<Container> containers = new ArrayList<Container>();
             for (int i = 0; i < args.length; i++) {
                 containers.add(LOADER.getExtension(args[i]));
@@ -86,6 +88,7 @@ public class Main {
                 });
             }
 
+            // 启动容器
             for (Container container : containers) {
                 container.start();
                 logger.info("Dubbo " + container.getClass().getSimpleName() + " started!");

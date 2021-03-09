@@ -40,12 +40,16 @@ public interface Configurator extends Comparable<Configurator> {
     /**
      * Get the configurator url.
      *
+     *  配置规则
+     *
      * @return configurator url.
      */
     URL getUrl();
 
     /**
      * Configure the provider url.
+     *
+     * 配置到 URL 中
      *
      * @param url - old provider url.
      * @return new provider url.

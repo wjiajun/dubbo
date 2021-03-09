@@ -101,19 +101,23 @@ public class RedisProtocol extends AbstractProtocol {
             if (url.getParameter("min.evictable.idle.time.millis", 0) > 0) {
                 config.setMinEvictableIdleTimeMillis(url.getParameter("min.evictable.idle.time.millis", 0));
             }
+            // 创建 JedisPool 对象
             final JedisPool jedisPool = new JedisPool(config, url.getHost(), url.getPort(DEFAULT_PORT),
                     url.getParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT),
                     StringUtils.isBlank(url.getPassword()) ? null : url.getPassword(),
                     url.getParameter("db.index", 0));
+            // 处理方法名的映射
             final int expiry = url.getParameter("expiry", 0);
             final String get = url.getParameter("get", "get");
             final String set = url.getParameter("set", Map.class.equals(type) ? "put" : "set");
             final String delete = url.getParameter("delete", Map.class.equals(type) ? "remove" : "delete");
+            // 创建 Invoker 对象
             return new AbstractInvoker<T>(type, url) {
                 @Override
                 protected Result doInvoke(Invocation invocation) throws Throwable {
                     Jedis jedis = null;
                     try {
+                        // 获得 Redis Resource
                         jedis = jedisPool.getResource();
 
                         if (get.equals(invocation.getMethodName())) {
@@ -130,6 +134,7 @@ public class RedisProtocol extends AbstractProtocol {
                             if (invocation.getArguments().length != 2) {
                                 throw new IllegalArgumentException("The redis set method arguments mismatch, must be two arguments. interface: " + type.getName() + ", method: " + invocation.getMethodName() + ", url: " + url);
                             }
+                            // 序列化
                             byte[] key = String.valueOf(invocation.getArguments()[0]).getBytes();
                             ByteArrayOutputStream output = new ByteArrayOutputStream();
                             ObjectOutput value = getSerialization(url).serialize(url, output);

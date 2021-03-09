@@ -21,6 +21,7 @@ import org.apache.dubbo.common.utils.ArrayUtils;
 
 /**
  * Holds the results of formatting done by {@link MessageFormatter}.
+ * 日志组件
  */
 class FormattingTuple {
 

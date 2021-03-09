@@ -25,6 +25,7 @@ import java.net.InetSocketAddress;
 public interface HttpServer extends Resetable, RemotingServer {
 
     /**
+     * // 处理器
      * get http handler.
      *
      * @return http handler.

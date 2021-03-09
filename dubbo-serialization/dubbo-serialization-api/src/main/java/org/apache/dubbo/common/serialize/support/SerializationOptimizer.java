@@ -25,6 +25,7 @@ public interface SerializationOptimizer {
 
     /**
      * Get serializable classes
+     * 需要使用优化的类的集合
      *
      * @return serializable classes
      * */

@@ -27,6 +27,7 @@ import org.apache.dubbo.rpc.Invocation;
  *
  * @see Cache
  */
+// Dubbo SPI 拓展点，默认为 "lru"
 @SPI("lru")
 public interface CacheFactory {
 

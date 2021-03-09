@@ -63,6 +63,11 @@ import static org.apache.dubbo.common.constants.FilterConstants.VALIDATION_KEY;
 @Activate(group = {CONSUMER, PROVIDER}, value = VALIDATION_KEY, order = 10000)
 public class ValidationFilter implements Filter {
 
+    /**
+     * Validation$Adaptive 对象
+     *
+     * 通过 Dubbo SPI 机制，调用 {@link #setValidation(Validation)} 方法，进行注入
+     */
     private Validation validation;
 
     /**
@@ -82,10 +87,13 @@ public class ValidationFilter implements Filter {
      */
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 非泛化调用和回音调用
         if (validation != null && !invocation.getMethodName().startsWith("$")
                 && ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), VALIDATION_KEY))) {
             try {
+                // 获得 Validator 对象
                 Validator validator = validation.getValidator(invoker.getUrl());
+                // 使用 Validator ，验证方法参数。若不合法，抛出异常。
                 if (validator != null) {
                     validator.validate(invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());
                 }

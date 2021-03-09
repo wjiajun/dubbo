@@ -34,10 +34,12 @@ public interface Transporter {
     /**
      * Bind a server.
      *
+     * 绑定一个服务器
+     *
      * @param url     server url
-     * @param handler
-     * @return server
-     * @throws RemotingException
+     * @param handler 通道处理器
+     * @return server 服务器
+     * @throws RemotingException 当绑定发生异常时
      * @see org.apache.dubbo.remoting.Transporters#bind(URL, ChannelHandler...)
      */
     @Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})

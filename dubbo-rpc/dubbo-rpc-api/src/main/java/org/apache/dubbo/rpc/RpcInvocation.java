@@ -101,6 +101,7 @@ public class RpcInvocation implements Invocation, Serializable {
             if (url.hasParameter(TIMEOUT_KEY)) {
                 setAttachment(TIMEOUT_KEY, url.getParameter(TIMEOUT_KEY));
             }
+            // token
             if (url.hasParameter(TOKEN_KEY)) {
                 setAttachment(TOKEN_KEY, url.getParameter(TOKEN_KEY));
             }

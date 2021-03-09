@@ -49,8 +49,14 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StubProxyFactoryWrapper.class);
 
+    /**
+     * ProxyFactory$Adaptive 对象
+     */
     private final ProxyFactory proxyFactory;
 
+    /**
+     * Protocol$Adaptive 对象
+     */
     private Protocol protocol;
 
     public StubProxyFactoryWrapper(ProxyFactory proxyFactory) {
@@ -63,12 +69,15 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
 
     @Override
     public <T> T getProxy(Invoker<T> invoker, boolean generic) throws RpcException {
+        // 获得 Service Proxy 对象
         T proxy = proxyFactory.getProxy(invoker, generic);
-        if (GenericService.class != invoker.getInterface()) {
+        if (GenericService.class != invoker.getInterface()) {// 非泛化引用
             URL url = invoker.getUrl();
+            // 获得 `stub` 配置项
             String stub = url.getParameter(STUB_KEY, url.getParameter(LOCAL_KEY));
             if (ConfigUtils.isNotEmpty(stub)) {
                 Class<?> serviceType = invoker.getInterface();
+                // `stub = true` 的情况，使用接口 + `Stub` 字符串。
                 if (ConfigUtils.isDefault(stub)) {
                     if (url.hasParameter(STUB_KEY)) {
                         stub = serviceType.getName() + "Stub";
@@ -77,11 +86,13 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
                     }
                 }
                 try {
+                    // 加载 Stub 类
                     Class<?> stubClass = ReflectUtils.forName(stub);
                     if (!serviceType.isAssignableFrom(stubClass)) {
                         throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + serviceType.getName());
                     }
                     try {
+                        // 创建 Stub 对象，使用带 Service Proxy 对象的构造方法
                         Constructor<?> constructor = ReflectUtils.findConstructor(stubClass, serviceType);
                         proxy = (T) constructor.newInstance(new Object[]{proxy});
                         //export stub service
@@ -111,6 +122,7 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public <T> T getProxy(Invoker<T> invoker) throws RpcException {
+
         return getProxy(invoker, false);
     }
 

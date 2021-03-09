@@ -44,6 +44,9 @@ public class HeartbeatTimerTask extends AbstractTimerTask {
         try {
             Long lastRead = lastRead(channel);
             Long lastWrite = lastWrite(channel);
+            // 接收的一方更新 lastRead 字段，发送的一方更新 lastWrite 字段，超过心跳间隙的时间，便发送心跳请求给对端。
+            // 这里的 lastRead/lastWrite 同样会被同一个通道上的普通调用更新，通过更新这两个字段，实现了只在连接空闲时才会真正发送空闲报文的机制。
+            // 空闲连接才会进行重连
             if ((lastRead != null && now() - lastRead > heartbeat)
                     || (lastWrite != null && now() - lastWrite > heartbeat)) {
                 Request req = new Request();

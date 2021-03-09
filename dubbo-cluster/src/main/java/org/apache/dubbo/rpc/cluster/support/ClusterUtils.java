@@ -50,9 +50,12 @@ public class ClusterUtils {
     }
 
     public static URL mergeUrl(URL remoteUrl, Map<String, String> localMap) {
+        // 合并配置 Map 结果
         Map<String, String> map = new HashMap<String, String>();
+        // 远程配置 Map 结果
         Map<String, String> remoteMap = remoteUrl.getParameters();
 
+        // 添加 `remoteMap` 到 `map` 中，并移除不必要的配置
         if (remoteMap != null && remoteMap.size() > 0) {
             map.putAll(remoteMap);
 
@@ -79,6 +82,7 @@ public class ClusterUtils {
             map.remove(DEFAULT_KEY_PREFIX + Constants.TRANSPORTER_KEY);
         }
 
+        // 添加 `localMap` 到 `map` 中
         if (localMap != null && localMap.size() > 0) {
             Map<String, String> copyOfLocalMap = new HashMap<>(localMap);
 

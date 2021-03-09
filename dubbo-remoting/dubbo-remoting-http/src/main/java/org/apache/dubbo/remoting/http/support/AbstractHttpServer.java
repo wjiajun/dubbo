@@ -32,10 +32,19 @@ import java.util.Collection;
  */
 public abstract class AbstractHttpServer implements HttpServer {
 
+    /**
+     * URL 对象
+     */
     private final URL url;
 
+    /**
+     * 处理器
+     */
     private final HttpHandler handler;
 
+    /**
+     * 是否关闭
+     */
     private volatile boolean closed;
 
     public AbstractHttpServer(URL url, HttpHandler handler) {

@@ -62,21 +62,25 @@ public class Log4jContainer implements Container {
             properties.setProperty("log4j.appender.application.layout.ConversionPattern", "%d [%t] %-5p %C{6} (%F:%L) - %m%n");
             PropertyConfigurator.configure(properties);
         }
+        // 获得日志子目录，用于多进程启动，避免冲突。
         String subdirectory = ConfigurationUtils.getProperty(LOG4J_SUBDIRECTORY);
         if (subdirectory != null && subdirectory.length() > 0) {
+            // 循环每个 Logger 对象
             Enumeration<org.apache.log4j.Logger> ls = LogManager.getCurrentLoggers();
             while (ls.hasMoreElements()) {
                 org.apache.log4j.Logger l = ls.nextElement();
                 if (l != null) {
+                    // 循环每个 Logger 对象的 Appender 对象
                     Enumeration<Appender> as = l.getAllAppenders();
                     while (as.hasMoreElements()) {
                         Appender a = as.nextElement();
-                        if (a instanceof FileAppender) {
+                        if (a instanceof FileAppender) {// 当且仅当 FileAppender 时
                             FileAppender fa = (FileAppender) a;
                             String f = fa.getFile();
                             if (f != null && f.length() > 0) {
                                 int i = f.replace('\\', '/').lastIndexOf('/');
                                 String path;
+                                // 拼接日志子目录
                                 if (i == -1) {
                                     path = subdirectory;
                                 } else {
@@ -86,7 +90,9 @@ public class Log4jContainer implements Container {
                                     }
                                     f = f.substring(i + 1);
                                 }
+                                // 设置新的文件名
                                 fa.setFile(path + "/" + f);
+                                // 生效配置
                                 fa.activateOptions();
                             }
                         }

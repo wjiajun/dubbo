@@ -172,6 +172,7 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
             return;
         }
 
+        // 超过上限，关闭新的链接
         Collection<Channel> channels = getChannels();
         if (accepts > 0 && channels.size() > accepts) {
             logger.error("Close channel " + ch + ", cause: The server " + ch.getLocalAddress() + " connections greater than max config " + accepts);

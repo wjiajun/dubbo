@@ -29,17 +29,23 @@ import java.util.Enumeration;
 
 public class Log4jLoggerAdapter implements LoggerAdapter {
 
+    /**
+     * Root Logger 的文件，在构造方法中初始化
+     */
     private File file;
 
     @SuppressWarnings("unchecked")
     public Log4jLoggerAdapter() {
         try {
+            // 获得 Root Logger 对象
             org.apache.log4j.Logger logger = LogManager.getRootLogger();
             if (logger != null) {
+                // 循环每个 Logger 对象的 Appender 对象
                 Enumeration<Appender> appenders = logger.getAllAppenders();
                 if (appenders != null) {
                     while (appenders.hasMoreElements()) {
                         Appender appender = appenders.nextElement();
+                        // 当且仅当 FileAppender 时
                         if (appender instanceof FileAppender) {
                             FileAppender fileAppender = (FileAppender) appender;
                             String filename = fileAppender.getFile();

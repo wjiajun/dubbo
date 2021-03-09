@@ -25,6 +25,7 @@ public class DubboInternalLoadingStrategy implements LoadingStrategy {
 
     @Override
     public String directory() {
+        // 用于 Dubbo 内部提供的拓展实现
         return "META-INF/dubbo/internal/";
     }
 

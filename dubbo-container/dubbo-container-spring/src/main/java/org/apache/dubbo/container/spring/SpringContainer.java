@@ -31,7 +31,13 @@ import org.springframework.context.support.ClassPathXmlApplicationContext;
  */
 public class SpringContainer implements Container {
 
+    /**
+      * Spring 配置属性 KEY
+      */
     public static final String SPRING_CONFIG = "dubbo.spring.config";
+    /**
+     * 默认配置文件地址
+     */
     public static final String DEFAULT_SPRING_CONFIG = "classpath*:META-INF/spring/*.xml";
     private static final Logger logger = LoggerFactory.getLogger(SpringContainer.class);
     static ClassPathXmlApplicationContext context;
@@ -42,12 +48,15 @@ public class SpringContainer implements Container {
 
     @Override
     public void start() {
+        // 获得 Spring 配置文件的地址
         String configPath = ConfigUtils.getProperty(SPRING_CONFIG);
         if (StringUtils.isEmpty(configPath)) {
             configPath = DEFAULT_SPRING_CONFIG;
         }
+        // 创建 Spring Context 对象
         context = new ClassPathXmlApplicationContext(configPath.split("[,\\s]+"), false);
         context.refresh();
+        // 启动 Spring Context ，会触发 ContextStartedEvent 事件
         context.start();
     }
 
@@ -55,7 +64,9 @@ public class SpringContainer implements Container {
     public void stop() {
         try {
             if (context != null) {
+                // 停止 Spring Context ，会触发 ContextStoppedEvent 事件。
                 context.stop();
+                // 关闭 Spring Context ，会触发 ContextClosedEvent 事件。
                 context.close();
                 context = null;
             }

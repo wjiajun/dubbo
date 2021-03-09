@@ -39,6 +39,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.INVOKER_LISTENER
 /**
  * ListenerProtocol
  */
+// 用于给 Exporter 增加 ExporterListener ，监听 Exporter 暴露完成和取消暴露完成
 @Activate(order = 200)
 public class ProtocolListenerWrapper implements Protocol {
 
@@ -58,21 +59,26 @@ public class ProtocolListenerWrapper implements Protocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 注册中心
         if (UrlUtils.isRegistry(invoker.getUrl())) {
             return protocol.export(invoker);
         }
-        return new ListenerExporterWrapper<T>(protocol.export(invoker),
-                Collections.unmodifiableList(ExtensionLoader.getExtensionLoader(ExporterListener.class)
+        // 创建带 ExporterListener 的 Exporter 对象
+        return new ListenerExporterWrapper<T>(protocol.export(invoker),   // 暴露服务，创建 Exporter 对象
+                Collections.unmodifiableList(ExtensionLoader.getExtensionLoader(ExporterListener.class)  // 获得 ExporterListener 数组
                         .getActivateExtension(invoker.getUrl(), EXPORTER_LISTENER_KEY)));
     }
 
     @Override
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
         if (UrlUtils.isRegistry(url)) {
+            // 引用服务
             return protocol.refer(type, url);
         }
+        // 创建 ListenerInvokerWrapper 对象
         return new ListenerInvokerWrapper<T>(protocol.refer(type, url),
                 Collections.unmodifiableList(
+                        // 获得 InvokerListener 数组
                         ExtensionLoader.getExtensionLoader(InvokerListener.class)
                                 .getActivateExtension(url, INVOKER_LISTENER_KEY)));
     }

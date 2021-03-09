@@ -57,8 +57,14 @@ import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
  */
 public class DubboInvoker<T> extends AbstractInvoker<T> {
 
+    /**
+    * 远程通信客户端数组
+    */
     private final ExchangeClient[] clients;
 
+    /**
+     * 使用的 {@link #clients} 的位置
+     */
     private final AtomicPositiveInteger index = new AtomicPositiveInteger();
 
     private final String version;
@@ -80,9 +86,12 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
     }
 
     @Override
+    // 发起调用
     protected Result doInvoke(final Invocation invocation) throws Throwable {
         RpcInvocation inv = (RpcInvocation) invocation;
+        // 获得方法名
         final String methodName = RpcUtils.getMethodName(invocation);
+        // 获得 `path`( 服务名 )，`version`
         inv.setAttachment(PATH_KEY, getUrl().getPath());
         inv.setAttachment(VERSION_KEY, version);
 
@@ -92,9 +101,11 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
         } else {
             currentClient = clients[index.getAndIncrement() % clients.length];
         }
+        // 远程调用
         try {
             boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
             int timeout = calculateTimeout(invocation, methodName);
+            // 获得是否单向调用
             if (isOneway) {
                 boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
                 currentClient.send(inv, isSent);
@@ -102,6 +113,7 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
             } else {
                 ExecutorService executor = getCallbackExecutor(getUrl(), inv);
                 CompletableFuture<AppResponse> appResponseFuture =
+                        // 在 Dubbo ThreadPool 中处理请求
                         currentClient.request(inv, timeout, executor).thenApply(obj -> (AppResponse) obj);
                 // save for 2.6.x compatibility, for example, TraceFilter in Zipkin uses com.alibaba.xxx.FutureAdapter
                 FutureContext.getContext().setCompatibleFuture(appResponseFuture);
@@ -135,19 +147,24 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
         // in order to avoid closing a client multiple times, a counter is used in case of connection per jvm, every
         // time when client.close() is called, counter counts down once, and when counter reaches zero, client will be
         // closed.
+        // 忽略，若已经销毁
         if (super.isDestroyed()) {
             return;
         } else {
             // double check to avoid dup close
+            // 双重锁校验，避免已经关闭
             destroyLock.lock();
             try {
                 if (super.isDestroyed()) {
                     return;
                 }
+                // 标记关闭
                 super.destroy();
+                // 移除出 `invokers`
                 if (invokers != null) {
                     invokers.remove(this);
                 }
+                // 关闭 ExchangeClient 们
                 for (ExchangeClient client : clients) {
                     try {
                         client.close(ConfigurationUtils.getServerShutdownTimeout());

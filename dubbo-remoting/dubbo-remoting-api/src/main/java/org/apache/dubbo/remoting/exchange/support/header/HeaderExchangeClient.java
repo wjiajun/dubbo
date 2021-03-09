@@ -45,22 +45,33 @@ import static org.apache.dubbo.remoting.utils.UrlUtils.getIdleTimeout;
  */
 public class HeaderExchangeClient implements ExchangeClient {
 
+    /**
+     * 客户端
+     */
     private final Client client;
+    /**
+     * 信息交换通道
+     */
     private final ExchangeChannel channel;
 
     private static final HashedWheelTimer IDLE_CHECK_TIMER = new HashedWheelTimer(
             new NamedThreadFactory("dubbo-client-idleCheck", true), 1, TimeUnit.SECONDS, TICKS_PER_WHEEL);
+    /**
+     * 心跳定时器
+     */
     private HeartbeatTimerTask heartBeatTimerTask;
     private ReconnectTimerTask reconnectTimerTask;
 
     public HeaderExchangeClient(Client client, boolean startTimer) {
         Assert.notNull(client, "Client can't be null");
         this.client = client;
+        // 创建 HeaderExchangeChannel 对象
         this.channel = new HeaderExchangeChannel(client);
 
         if (startTimer) {
             URL url = client.getUrl();
             startReconnectTask(url);
+            // 发起心跳定时器
             startHeartBeatTask(url);
         }
     }
@@ -186,16 +197,22 @@ public class HeaderExchangeClient implements ExchangeClient {
         return channel.hasAttribute(key);
     }
 
+    // 主要用于定时发送心跳请求
     private void startHeartBeatTask(URL url) {
         if (!client.canHandleIdle()) {
             AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);
             int heartbeat = getHeartbeat(url);
+            // 心跳时间和超时时间分别计算出了一个 tick 时间
             long heartbeatTick = calculateLeastDuration(heartbeat);
+            // 实际上就是将两个变量除以了 3，使得他们的值缩小，并传入了 HashedWheelTimer 的第二个参数之中
+            // tick 的含义便是定时任务执行的频率。
+            // 这样，通过减少检测间隔时间，增大了及时发现死链的概率，原先的最坏情况是 60s，如今变成了 20s。这个频率依旧可以加快，但需要考虑资源消耗的问题。
             this.heartBeatTimerTask = new HeartbeatTimerTask(cp, heartbeatTick, heartbeat);
             IDLE_CHECK_TIMER.newTimeout(heartBeatTimerTask, heartbeatTick, TimeUnit.MILLISECONDS);
         }
     }
 
+    // 主要用于心跳失败之后处理重连，断连的逻辑
     private void startReconnectTask(URL url) {
         if (shouldReconnect(url)) {
             AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);

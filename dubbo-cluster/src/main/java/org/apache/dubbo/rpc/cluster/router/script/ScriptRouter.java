@@ -54,8 +54,14 @@ public class ScriptRouter extends AbstractRouter {
     private static final int SCRIPT_ROUTER_DEFAULT_PRIORITY = 0;
     private static final Logger logger = LoggerFactory.getLogger(ScriptRouter.class);
 
+    /**
+     * 脚本类型 与 ScriptEngine 的映射缓存
+     */
     private static final Map<String, ScriptEngine> ENGINES = new ConcurrentHashMap<>();
 
+    /**
+     * 路由规则 URL
+     */
     private final ScriptEngine engine;
 
     private final String rule;

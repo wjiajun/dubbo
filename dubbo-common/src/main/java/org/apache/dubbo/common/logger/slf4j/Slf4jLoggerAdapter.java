@@ -38,22 +38,22 @@ public class Slf4jLoggerAdapter implements LoggerAdapter {
     }
 
     @Override
-    public Level getLevel() {
+    public Level getLevel() { // 无用
         return level;
     }
 
     @Override
-    public void setLevel(Level level) {
+    public void setLevel(Level level) {// 无用
         this.level = level;
     }
 
     @Override
-    public File getFile() {
+    public File getFile() {// 无用
         return file;
     }
 
     @Override
-    public void setFile(File file) {
+    public void setFile(File file) {// 无用
         this.file = file;
     }
 

@@ -23,6 +23,7 @@ import org.apache.dubbo.remoting.Constants;
 
 /**
  * HttpBinder
+ * @SPI("jetty") 注解，Dubbo SPI 拓展点，默认为 "jetty" ，即未配置情况下，使用 Jetty Server
  */
 @SPI("jetty")
 public interface HttpBinder {

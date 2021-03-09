@@ -39,7 +39,13 @@ public class HeartBeatTaskTest {
 
     private MockChannel channel;
 
+    /**
+     * 心跳间隔，单位：毫秒
+     */
     private HeartbeatTimerTask heartbeatTimerTask;
+    /**
+     * 心跳超时时间，单位：毫秒
+     */
     private HashedWheelTimer heartbeatTimer;
 
     @BeforeEach

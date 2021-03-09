@@ -24,14 +24,29 @@ import java.util.concurrent.atomic.LongAdder;
  */
 class StatItem {
 
+    /**
+     * 统计名，目前使用服务名
+     */
     private String name;
 
+    /**
+     * 最后重置时间
+     */
     private long lastResetTime;
 
+    /**
+     * 周期
+     */
     private long interval;
 
+    /**
+     * 当前周期，剩余种子数
+     */
     private LongAdder token;
 
+    /**
+     * 限制大小
+     */
     private int rate;
 
     StatItem(String name, int rate, long interval) {

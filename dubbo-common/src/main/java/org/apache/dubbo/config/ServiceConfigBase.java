@@ -269,6 +269,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
         if (interfaceClass != null) {
             return interfaceClass;
         }
+        // 泛化调用
         if (ref instanceof GenericService) {
             return GenericService.class;
         }

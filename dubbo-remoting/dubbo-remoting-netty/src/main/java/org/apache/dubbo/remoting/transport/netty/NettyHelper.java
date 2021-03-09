@@ -23,6 +23,7 @@ import org.jboss.netty.logging.AbstractInternalLogger;
 import org.jboss.netty.logging.InternalLogger;
 import org.jboss.netty.logging.InternalLoggerFactory;
 
+// 日志组件
 final class NettyHelper {
 
     public static void setNettyLoggerFactory() {

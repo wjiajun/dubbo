@@ -69,7 +69,9 @@ public class ConfigurationUtils {
     // FIXME
     @SuppressWarnings("deprecation")
     public static int getServerShutdownTimeout() {
+        // 默认，10 * 1000 毫秒
         int timeout = DEFAULT_SERVER_SHUTDOWN_TIMEOUT;
+        // 获得 "dubbo.service.shutdown.wait" 配置项，单位：毫秒
         Configuration configuration = getGlobalConfiguration();
         String value = StringUtils.trim(configuration.getString(SHUTDOWN_WAIT_KEY));
 

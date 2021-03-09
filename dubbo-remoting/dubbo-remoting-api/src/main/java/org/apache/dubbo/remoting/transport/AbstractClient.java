@@ -58,6 +58,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
 
         initExecutor(url);
 
+        // 初始化客户端
         try {
             doOpen();
         } catch (Throwable t) {
@@ -66,6 +67,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                     "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
                             + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
         }
+        // 连接服务器
         try {
             // connect.
             connect();
@@ -89,11 +91,20 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     }
 
     private void initExecutor(URL url) {
+        // 从 URL 中，获得重连相关配置项
         url = ExecutorUtil.setThreadName(url, CLIENT_THREAD_POOL_NAME);
         url = url.addParameterIfAbsent(THREADPOOL_KEY, DEFAULT_CLIENT_THREADPOOL);
+        // 获得线程池
         executor = executorRepository.createExecutorIfAbsent(url);
     }
 
+    /**
+     * 包装通道处理器
+     *
+     * @param url URL
+     * @param handler 被包装的通道处理器
+     * @return 包装后的通道处理器
+     */
     protected static ChannelHandler wrapChannelHandler(URL url, ChannelHandler handler) {
         return ChannelHandlers.wrap(handler, url);
     }
@@ -188,6 +199,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                 return;
             }
 
+            // 执行连接
             doConnect();
 
             if (!isConnected()) {

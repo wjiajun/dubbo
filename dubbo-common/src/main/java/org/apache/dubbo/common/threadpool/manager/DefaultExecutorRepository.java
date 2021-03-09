@@ -109,6 +109,7 @@ public class DefaultExecutorRepository implements ExecutorRepository {
         if (executor != null) {
             if (executor.isShutdown() || executor.isTerminated()) {
                 executors.remove(portKey);
+                // 获取dubbo 执行线程池
                 executor = createExecutor(url);
                 executors.put(portKey, executor);
             }

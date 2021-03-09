@@ -44,6 +44,7 @@ public class ChannelHandlers {
 
     protected ChannelHandler wrapInternal(ChannelHandler handler, URL url) {
         return new MultiMessageHandler(new HeartbeatHandler(ExtensionLoader.getExtensionLoader(Dispatcher.class)
+                // 选择线程模型的功能
                 .getAdaptiveExtension().dispatch(handler, url)));
     }
 }

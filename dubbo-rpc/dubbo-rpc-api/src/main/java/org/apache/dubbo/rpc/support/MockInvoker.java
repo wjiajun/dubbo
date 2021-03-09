@@ -48,8 +48,21 @@ import static org.apache.dubbo.rpc.Constants.RETURN_PREFIX;
 import static org.apache.dubbo.rpc.Constants.THROW_PREFIX;
 
 final public class MockInvoker<T> implements Invoker<T> {
+    /**
+     * ProxyFactory$Adaptive 对象
+     */
     private final static ProxyFactory PROXY_FACTORY = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
+    /**
+     * mock 与 Invoker 对象的映射缓存
+     *
+     * @see #getInvoker(String)
+     */
     private final static Map<String, Invoker<?>> MOCK_MAP = new ConcurrentHashMap<String, Invoker<?>>();
+    /**
+     * mock 与 Throwable 对象的映射缓存
+     *
+     * @see #getThrowable(String)
+     */
     private final static Map<String, Throwable> THROWABLE_MAP = new ConcurrentHashMap<String, Throwable>();
 
     private final URL url;
@@ -65,8 +78,9 @@ final public class MockInvoker<T> implements Invoker<T> {
     }
 
     public static Object parseMockValue(String mock, Type[] returnTypes) throws Exception {
+        // 解析值（不考虑返回类型）
         Object value = null;
-        if ("empty".equals(mock)) {
+        if ("empty".equals(mock)) {// 未赋值的对象，即 new XXX() 对象
             value = ReflectUtils.getEmptyObject(returnTypes != null && returnTypes.length > 0 ? (Class<?>) returnTypes[0] : null);
         } else if ("null".equals(mock)) {
             value = null;
@@ -88,6 +102,7 @@ final public class MockInvoker<T> implements Invoker<T> {
         } else {
             value = mock;
         }
+        // 转换成对应的返回类型
         if (ArrayUtils.isNotEmpty(returnTypes)) {
             value = PojoUtils.realize(value, (Class<?>) returnTypes[0], returnTypes.length > 1 ? returnTypes[1] : null);
         }
@@ -99,19 +114,23 @@ final public class MockInvoker<T> implements Invoker<T> {
         if (invocation instanceof RpcInvocation) {
             ((RpcInvocation) invocation).setInvoker(this);
         }
+        // 获得 `"mock"` 配置项，方法级 > 类级
         String mock = null;
         if (getUrl().hasMethodParameter(invocation.getMethodName())) {
             mock = getUrl().getParameter(invocation.getMethodName() + "." + MOCK_KEY);
         }
-        if (StringUtils.isBlank(mock)) {
+        if (StringUtils.isBlank(mock)) {// 不允许为空
             mock = getUrl().getParameter(MOCK_KEY);
         }
 
         if (StringUtils.isBlank(mock)) {
             throw new RpcException(new IllegalAccessException("mock can not be null. url :" + url));
         }
+        // 标准化 `"mock"` 配置项
         mock = normalizeMock(URL.decode(mock));
+        // 以 "return " 开头，返回对应值的 RpcResult 对象
         if (mock.startsWith(RETURN_PREFIX)) {
+            // 等于 "return " ，返回值为空的 RpcResult 对象
             mock = mock.substring(RETURN_PREFIX.length()).trim();
             try {
                 Type[] returnTypes = RpcUtils.getReturnTypes(invocation);
@@ -123,15 +142,20 @@ final public class MockInvoker<T> implements Invoker<T> {
             }
         } else if (mock.startsWith(THROW_PREFIX)) {
             mock = mock.substring(THROW_PREFIX.length()).trim();
-            if (StringUtils.isBlank(mock)) {
+            if (StringUtils.isBlank(mock)) { // 禁止为空
                 throw new RpcException("mocked exception for service degradation.");
             } else { // user customized class
+                // 创建自定义异常
                 Throwable t = getThrowable(mock);
+                // 抛出业务类型的 RpcException 异常
                 throw new RpcException(RpcException.BIZ_EXCEPTION, t);
             }
+        // 自定义 Mock 类，执行自定义逻辑
         } else { //impl mock
             try {
+                // 创建 Invoker 对象
                 Invoker<T> invoker = getInvoker(mock);
+                // 执行 Invoker 对象的调用逻辑
                 return invoker.invoke(invocation);
             } catch (Throwable t) {
                 throw new RpcException("Failed to create mock implementation class " + mock, t);
@@ -140,17 +164,23 @@ final public class MockInvoker<T> implements Invoker<T> {
     }
 
     public static Throwable getThrowable(String throwstr) {
+        // 从缓存中，获得 Throwable 对象
         Throwable throwable = THROWABLE_MAP.get(throwstr);
         if (throwable != null) {
             return throwable;
         }
 
         try {
+            // 不存在，创建 Throwable 对象
             Throwable t;
+            // 获得异常类
             Class<?> bizException = ReflectUtils.forName(throwstr);
+            // 获得构造方法
             Constructor<?> constructor;
             constructor = ReflectUtils.findConstructor(bizException, String.class);
+            // 创建 Throwable 对象
             t = (Throwable) constructor.newInstance(new Object[]{"mocked exception for service degradation."});
+            // 添加到缓存中
             if (THROWABLE_MAP.size() < 1000) {
                 THROWABLE_MAP.put(throwstr, t);
             }
@@ -162,14 +192,21 @@ final public class MockInvoker<T> implements Invoker<T> {
 
     @SuppressWarnings("unchecked")
     private Invoker<T> getInvoker(String mockService) {
+        // 从缓存中，获得 Invoker 对象
         Invoker<T> invoker = (Invoker<T>) MOCK_MAP.get(mockService);
         if (invoker != null) {
             return invoker;
         }
 
+        // 不存在，创建 Invoker 对象
+        // 1. 获得接口类
         Class<T> serviceType = (Class<T>) ReflectUtils.forName(url.getServiceInterface());
+        // 2. 若为 `true` `default` ，修改修改为对应接口 + "Mock" 类。这种情况出现在原始 `mock = fail:true` 或 `mock = force:true` 等情况
+        // 5. 创建 Mock 对象
         T mockObject = (T) getMockObject(mockService, serviceType);
+        // 6. 创建 Mock 对应，对应的 Invoker 对象
         invoker = PROXY_FACTORY.getInvoker(mockObject, serviceType, url);
+        // 7. 添加到缓存
         if (MOCK_MAP.size() < 10000) {
             MOCK_MAP.put(mockService, invoker);
         }
@@ -230,6 +267,7 @@ final public class MockInvoker<T> implements Invoker<T> {
      * @return normalized mock string
      */
     public static String normalizeMock(String mock) {
+        // 若为空，直接返回
         if (mock == null) {
             return mock;
         }
@@ -248,10 +286,12 @@ final public class MockInvoker<T> implements Invoker<T> {
             return "default";
         }
 
+        // 若以 "fail:" 开头，去掉该开头
         if (mock.startsWith(FAIL_PREFIX)) {
             mock = mock.substring(FAIL_PREFIX.length()).trim();
         }
 
+        // 若以 "force:" 开头，去掉该开头
         if (mock.startsWith(FORCE_PREFIX)) {
             mock = mock.substring(FORCE_PREFIX.length()).trim();
         }

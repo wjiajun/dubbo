@@ -41,6 +41,7 @@ public abstract class AbstractCodec implements Codec2 {
 
     private static final String SERVER_SIDE = "server";
 
+    // 静态方法，校验消息长度。
     protected static void checkPayload(Channel channel, long size) throws IOException {
         int payload = Constants.DEFAULT_PAYLOAD;
         if (channel != null && channel.getUrl() != null) {
@@ -54,6 +55,7 @@ public abstract class AbstractCodec implements Codec2 {
         }
     }
 
+    // 获得 Serialization 对象。
     protected Serialization getSerialization(Channel channel) {
         return CodecSupport.getSerialization(channel.getUrl());
     }

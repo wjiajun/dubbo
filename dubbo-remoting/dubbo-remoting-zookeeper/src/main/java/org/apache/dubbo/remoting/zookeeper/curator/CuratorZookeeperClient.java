@@ -55,6 +55,9 @@ public class CuratorZookeeperClient extends AbstractZookeeperClient<CuratorZooke
     private static final String ZK_SESSION_EXPIRE_KEY = "zk.session.expire";
 
     static final Charset CHARSET = Charset.forName("UTF-8");
+    /**
+     * client 对象
+     */
     private final CuratorFramework client;
     private Map<String, TreeCache> treeCacheMap = new ConcurrentHashMap<>();
 
@@ -63,17 +66,21 @@ public class CuratorZookeeperClient extends AbstractZookeeperClient<CuratorZooke
         try {
             int timeout = url.getParameter(TIMEOUT_KEY, DEFAULT_CONNECTION_TIMEOUT_MS);
             int sessionExpireMs = url.getParameter(ZK_SESSION_EXPIRE_KEY, DEFAULT_SESSION_TIMEOUT_MS);
+            // 创建 client 对象
             CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder()
-                    .connectString(url.getBackupAddress())
-                    .retryPolicy(new RetryNTimes(1, 1000))
-                    .connectionTimeoutMs(timeout)
+                    .connectString(url.getBackupAddress())// 连接地址
+                    .retryPolicy(new RetryNTimes(1, 1000))// 重试策略，1 次，间隔 1000 ms
+                    .connectionTimeoutMs(timeout) // 连接超时时间
                     .sessionTimeoutMs(sessionExpireMs);
             String authority = url.getAuthority();
             if (authority != null && authority.length() > 0) {
                 builder = builder.authorization("digest", authority.getBytes());
             }
             client = builder.build();
+            // 添加连接监听器
+            // 在连接状态发生变化时，调用 #stateChange(state) 方法，进行 StateListener 的回调。
             client.getConnectionStateListenable().addListener(new CuratorConnectionStateListener(url));
+            // 启动 client
             client.start();
             boolean connected = client.blockUntilConnected(timeout, TimeUnit.MILLISECONDS);
             if (!connected) {

@@ -54,9 +54,15 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 服务器
+     */
     private final RemotingServer server;
     private AtomicBoolean closed = new AtomicBoolean(false);
 
+    /**
+     * 心跳定时器
+     */
     private static final HashedWheelTimer IDLE_CHECK_TIMER = new HashedWheelTimer(new NamedThreadFactory("dubbo-server-idleCheck", true), 1,
             TimeUnit.SECONDS, TICKS_PER_WHEEL);
 
@@ -64,6 +70,7 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     public HeaderExchangeServer(RemotingServer server) {
         Assert.notNull(server, "server == null");
+        // 读取心跳相关配置
         this.server = server;
         startIdleCheckTask(getUrl());
     }
@@ -101,13 +108,16 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void close(final int timeout) {
+        // 关闭
         startClose();
         if (timeout > 0) {
             final long max = (long) timeout;
             final long start = System.currentTimeMillis();
+            // 发送 READONLY 事件给所有 Client ，表示 Server 不可读了。
             if (getUrl().getParameter(Constants.CHANNEL_SEND_READONLYEVENT_KEY, true)) {
                 sendChannelReadOnlyEvent();
             }
+            // 等待请求完成
             while (HeaderExchangeServer.this.isRunning()
                     && System.currentTimeMillis() - start < max) {
                 try {
@@ -117,21 +127,26 @@ public class HeaderExchangeServer implements ExchangeServer {
                 }
             }
         }
+        // 关闭心跳定时器
         doClose();
+        // 关闭服务器
         server.close(timeout);
     }
 
     @Override
+    // 标记正在关闭
     public void startClose() {
         server.startClose();
     }
 
     private void sendChannelReadOnlyEvent() {
+        // 创建 READONLY_EVENT 请求
         Request request = new Request();
         request.setEvent(READONLY_EVENT);
-        request.setTwoWay(false);
+        request.setTwoWay(false);// 无需响应
         request.setVersion(Version.getProtocolVersion());
 
+        // 发送给所有 Client
         Collection<Channel> channels = getChannels();
         for (Channel channel : channels) {
             try {
@@ -208,12 +223,14 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void reset(URL url) {
+        // 重置服务器
         server.reset(url);
         try {
             int currHeartbeat = getHeartbeat(getUrl());
             int currIdleTimeout = getIdleTimeout(getUrl());
             int heartbeat = getHeartbeat(url);
             int idleTimeout = getIdleTimeout(url);
+            // 重置定时任务
             if (currHeartbeat != heartbeat || currIdleTimeout != idleTimeout) {
                 cancelCloseTask();
                 startIdleCheckTask(url);
