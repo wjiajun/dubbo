@@ -103,7 +103,7 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
             // 初始化 virtualInvokers
             for (Invoker<T> invoker : invokers) {
                 String address = invoker.getUrl().getAddress();
-                // 每四个虚拟结点为一组，为什么这样？下面会说到
+                // 每四个虚拟结点为一组
                 for (int i = 0; i < replicaNumber / 4; i++) {
                     // 这组虚拟结点得到惟一名
                     byte[] digest = md5(address + i);

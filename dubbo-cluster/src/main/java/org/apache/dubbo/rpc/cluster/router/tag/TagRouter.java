@@ -92,7 +92,7 @@ public class TagRouter extends AbstractRouter implements ConfigurationListener {
 
         // since the rule can be changed by config center, we should copy one to use.
         final TagRouterRule tagRouterRuleCopy = tagRouterRule;
-        if (tagRouterRuleCopy == null || !tagRouterRuleCopy.isValid() || !tagRouterRuleCopy.isEnabled()) {
+            if (tagRouterRuleCopy == null || !tagRouterRuleCopy.isValid() || !tagRouterRuleCopy.isEnabled()) {
             return filterUsingStaticTag(invokers, url, invocation);
         }
 
