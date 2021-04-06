@@ -68,6 +68,11 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      */
     private static final int CACHE_SIZE = Integer.getInteger(BEAN_NAME + ".cache.size", 32);
 
+    /**
+     * ReferenceBean 缓存 Map
+     *
+     * KEY：Reference Bean 的名字
+     */
     private final ConcurrentMap<String, ReferenceBean<?>> referenceBeanCache =
             new ConcurrentHashMap<>(CACHE_SIZE);
 
@@ -124,13 +129,14 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         /**
          * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
          */
+        // <1> 获得 Reference Bean 的名字
         String referencedBeanName = buildReferencedBeanName(attributes, injectedType);
 
         /**
          * The name of bean that is declared by {@link Reference @Reference} annotation injection
          */
         String referenceBeanName = getReferenceBeanName(attributes, injectedType);
-
+        // <2> 创建 ReferenceBean 对象
         ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referenceBeanName, attributes, injectedType);
 
         boolean localServiceBean = isLocalServiceBean(referencedBeanName, referenceBean, attributes);
@@ -138,9 +144,9 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         prepareReferenceBean(referencedBeanName, referenceBean, localServiceBean);
 
         registerReferenceBean(referencedBeanName, referenceBean, attributes, localServiceBean, injectedType);
-
+        // <3> 缓存到 injectedFieldReferenceBeanCache or injectedMethodReferenceBeanCache 中
         cacheInjectedReferenceBean(referenceBean, injectedElement);
-
+        // <4> 创建 Proxy 代理对象
         return referenceBean.get();
     }
 
@@ -300,6 +306,7 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      * @return The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
      */
     private String buildReferencedBeanName(AnnotationAttributes attributes, Class<?> serviceInterfaceType) {
+        // 创建 Service Bean 的名字
         ServiceBeanNameBuilder serviceBeanNameBuilder = create(attributes, serviceInterfaceType, getEnvironment());
         return serviceBeanNameBuilder.build();
     }
@@ -308,8 +315,10 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
                                                      Class<?> referencedType)
             throws Exception {
 
+        // 首先，从 referenceBeanCache 缓存中，获得 referencedBeanName 对应的 ReferenceBean 对象
         ReferenceBean<?> referenceBean = referenceBeanCache.get(referenceBeanName);
 
+        // 然后，如果不存在，则进行创建。然后，添加到 referenceBeanCache 缓存中。
         if (referenceBean == null) {
             ReferenceBeanBuilder beanBuilder = ReferenceBeanBuilder
                     .create(attributes, applicationContext)
@@ -340,6 +349,7 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
     @Override
     public void destroy() throws Exception {
         super.destroy();
+        // 清空缓存
         this.referenceBeanCache.clear();
         this.injectedFieldReferenceBeanCache.clear();
         this.injectedMethodReferenceBeanCache.clear();

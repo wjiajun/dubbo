@@ -324,7 +324,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         if (shouldJvmRefer(map)) {
             // 创建服务引用 URL 对象
             URL url = new URL(LOCAL_PROTOCOL, LOCALHOST_VALUE, 0, interfaceClass.getName()).addParameters(map);
-            // 引用服务，返回 Invoker 对象
+            // 引用服务，返回 Invoker 对象(将service接口转invoker)
             invoker = REF_PROTOCOL.refer(interfaceClass, url);
             if (logger.isInfoEnabled()) {
                 logger.info("Using injvm service " + interfaceClass.getName());

@@ -245,7 +245,9 @@ public class ConfigValidationUtils {
         } else if (monitor != null) {
             address = monitor.getAddress();
         }
+        // 直连监控中心服务器地址
         if (ConfigUtils.isNotEmpty(address)) {
+            // 若不存在 `protocol` 参数，默认 "dubbo" 添加到 `map` 集合中。
             if (!map.containsKey(PROTOCOL_KEY)) {
                 if (getExtensionLoader(MonitorFactory.class).hasExtension(LOGSTAT_PROTOCOL)) {
                     map.put(PROTOCOL_KEY, LOGSTAT_PROTOCOL);
@@ -253,10 +255,12 @@ public class ConfigValidationUtils {
                     map.put(PROTOCOL_KEY, DUBBO_PROTOCOL);
                 }
             }
+            // 解析地址，创建 Dubbo URL 对象。
             return UrlUtils.parseURL(address, map);
         } else if (monitor != null &&
                 (REGISTRY_PROTOCOL.equals(monitor.getProtocol()) || SERVICE_REGISTRY_PROTOCOL.equals(monitor.getProtocol()))
                 && registryURL != null) {
+            // 从注册中心发现监控中心地址
             return URLBuilder.from(registryURL)
                     .setProtocol(DUBBO_PROTOCOL)
                     .addParameter(PROTOCOL_KEY, monitor.getProtocol())

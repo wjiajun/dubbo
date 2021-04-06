@@ -289,6 +289,7 @@ public class HashedWheelTimer implements Timer {
         return wheel;
     }
 
+    // 返回为最接近它的值的为2的倍数
     private static int normalizeTicksPerWheel(int ticksPerWheel) {
         int normalizedTicksPerWheel = ticksPerWheel - 1;
         normalizedTicksPerWheel |= normalizedTicksPerWheel >>> 1;
@@ -482,13 +483,16 @@ public class HashedWheelTimer implements Timer {
                 }
 
                 long calculated = timeout.deadline / tickDuration;
+                // 计算需要转多少圈
                 timeout.remainingRounds = (calculated - tick) / wheel.length;
 
                 // Ensure we don't schedule for past.
                 final long ticks = Math.max(calculated, tick);
+                // 计算终止的时间轮位置
                 int stopIndex = (int) (ticks & mask);
 
                 HashedWheelBucket bucket = wheel[stopIndex];
+                // 添加到bucket对应的链表中
                 bucket.addTimeout(timeout);
             }
         }

@@ -58,8 +58,12 @@ public class HeaderExchangeClient implements ExchangeClient {
             new NamedThreadFactory("dubbo-client-idleCheck", true), 1, TimeUnit.SECONDS, TICKS_PER_WHEEL);
     /**
      * 心跳定时器
+     * 主要用于定时发送心跳请求
      */
     private HeartbeatTimerTask heartBeatTimerTask;
+    /**
+     * 主要用于心跳失败之后处理重连，断连的逻辑
+     */
     private ReconnectTimerTask reconnectTimerTask;
 
     public HeaderExchangeClient(Client client, boolean startTimer) {
@@ -217,6 +221,7 @@ public class HeaderExchangeClient implements ExchangeClient {
         if (shouldReconnect(url)) {
             AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);
             int idleTimeout = getIdleTimeout(url);
+            // 心跳时间和超时时间分别计算出了一个 tick 时间
             long heartbeatTimeoutTick = calculateLeastDuration(idleTimeout);
             this.reconnectTimerTask = new ReconnectTimerTask(cp, heartbeatTimeoutTick, idleTimeout);
             IDLE_CHECK_TIMER.newTimeout(reconnectTimerTask, heartbeatTimeoutTick, TimeUnit.MILLISECONDS);

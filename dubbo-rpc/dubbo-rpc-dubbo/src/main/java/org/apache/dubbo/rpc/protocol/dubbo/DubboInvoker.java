@@ -164,7 +164,7 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
                 if (invokers != null) {
                     invokers.remove(this);
                 }
-                // 关闭 ExchangeClient 们
+                // 关闭 ExchangeClient
                 for (ExchangeClient client : clients) {
                     try {
                         client.close(ConfigurationUtils.getServerShutdownTimeout());

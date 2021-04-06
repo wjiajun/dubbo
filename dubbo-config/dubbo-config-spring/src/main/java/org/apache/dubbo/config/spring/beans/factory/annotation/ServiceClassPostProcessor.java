@@ -147,12 +147,12 @@ public class ServiceClassPostProcessor implements BeanDefinitionRegistryPostProc
      * @param registry       {@link BeanDefinitionRegistry}
      */
     private void registerServiceBeans(Set<String> packagesToScan, BeanDefinitionRegistry registry) {
-
+        // <1.1> 创建 DubboClassPathBeanDefinitionScanner 对象
         DubboClassPathBeanDefinitionScanner scanner =
                 new DubboClassPathBeanDefinitionScanner(registry, environment, resourceLoader);
-
+        // <1.2> 获得 BeanNameGenerator 对象，并设置 beanNameGenerator 到 scanner 中
         BeanNameGenerator beanNameGenerator = resolveBeanNameGenerator(registry);
-
+        // <1.3> 设置过滤获得带有 @Service 注解的类
         scanner.setBeanNameGenerator(beanNameGenerator);
 
         // refactor @since 2.7.7
@@ -160,15 +160,18 @@ public class ServiceClassPostProcessor implements BeanDefinitionRegistryPostProc
             scanner.addIncludeFilter(new AnnotationTypeFilter(annotationType));
         });
 
+        // <2> 遍历 packagesToScan 数组
         for (String packageToScan : packagesToScan) {
 
             // Registers @Service Bean first
+            // <2.1> 执行扫描
             scanner.scan(packageToScan);
 
             // Finds all BeanDefinitionHolders of @Service whether @ComponentScan scans or not.
+            // <2.2> 创建每个在 packageToScan 扫描到的类，对应的 BeanDefinitionHolder 对象，返回 BeanDefinitionHolder 集合
             Set<BeanDefinitionHolder> beanDefinitionHolders =
                     findServiceBeanDefinitionHolders(scanner, packageToScan, registry, beanNameGenerator);
-
+            // <2.3> 注册到 registry 中
             if (!CollectionUtils.isEmpty(beanDefinitionHolders)) {
 
                 for (BeanDefinitionHolder beanDefinitionHolder : beanDefinitionHolders) {
@@ -247,15 +250,19 @@ public class ServiceClassPostProcessor implements BeanDefinitionRegistryPostProc
     private Set<BeanDefinitionHolder> findServiceBeanDefinitionHolders(
             ClassPathBeanDefinitionScanner scanner, String packageToScan, BeanDefinitionRegistry registry,
             BeanNameGenerator beanNameGenerator) {
-
+        // 获得 packageToScan 包下符合条件的 BeanDefinition 集合
         Set<BeanDefinition> beanDefinitions = scanner.findCandidateComponents(packageToScan);
 
+        // 创建 BeanDefinitionHolder 集合
         Set<BeanDefinitionHolder> beanDefinitionHolders = new LinkedHashSet<>(beanDefinitions.size());
 
+        // 遍历 beanDefinitions 数组
         for (BeanDefinition beanDefinition : beanDefinitions) {
-
+            // 获得 Bean 的名字
             String beanName = beanNameGenerator.generateBeanName(beanDefinition, registry);
+            // 创建 BeanDefinitionHolder 对象
             BeanDefinitionHolder beanDefinitionHolder = new BeanDefinitionHolder(beanDefinition, beanName);
+            // 添加到 beanDefinitions 中
             beanDefinitionHolders.add(beanDefinitionHolder);
 
         }
@@ -276,25 +283,27 @@ public class ServiceClassPostProcessor implements BeanDefinitionRegistryPostProc
     private void registerServiceBean(BeanDefinitionHolder beanDefinitionHolder, BeanDefinitionRegistry registry,
                                      DubboClassPathBeanDefinitionScanner scanner) {
 
+        // <1.1> 解析 Bean 的类
         Class<?> beanClass = resolveClass(beanDefinitionHolder);
-
+        // <1.2> 获得 @Service 注解
         Annotation service = findServiceAnnotation(beanClass);
 
         /**
          * The {@link AnnotationAttributes} of @Service annotation
          */
         AnnotationAttributes serviceAnnotationAttributes = getAnnotationAttributes(service, false, false);
-
+        // <1.3> 获得 Service 接口
         Class<?> interfaceClass = resolveServiceInterfaceClass(serviceAnnotationAttributes, beanClass);
-
+        // <1.4> 获得 Bean 的名字
         String annotatedServiceBeanName = beanDefinitionHolder.getBeanName();
-
+        // <1.5> 创建 AbstractBeanDefinition 对象
         AbstractBeanDefinition serviceBeanDefinition =
                 buildServiceBeanDefinition(service, serviceAnnotationAttributes, interfaceClass, annotatedServiceBeanName);
 
         // ServiceBean Bean name
+        // <2> 重新生成 Bean 的名字
         String beanName = generateServiceBeanName(serviceAnnotationAttributes, interfaceClass);
-
+        // <3> 校验在 scanner 中，已经存在 beanName 。若不存在，则进行注册。
         if (scanner.checkCandidate(beanName, serviceBeanDefinition)) { // check duplicated candidate bean
             registry.registerBeanDefinition(beanName, serviceBeanDefinition);
 

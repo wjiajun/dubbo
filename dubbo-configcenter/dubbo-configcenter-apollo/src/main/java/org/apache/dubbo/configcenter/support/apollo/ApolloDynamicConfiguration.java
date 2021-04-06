@@ -231,6 +231,7 @@ public class ApolloDynamicConfiguration implements DynamicConfiguration {
                 }
 
                 ConfigChangedEvent event = new ConfigChangedEvent(key, change.getNamespace(), change.getNewValue(), getChangeType(change));
+                // 配置变更
                 listeners.forEach(listener -> listener.process(event));
             }
         }

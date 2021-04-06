@@ -185,6 +185,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         dispatch(new ServiceConfigUnexportedEvent(this));
     }
 
+    @Override
     public synchronized void export() {
         if (!shouldExport()) {
             return;
@@ -334,7 +335,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
     }
 
     /**
-     * 基于单个协议，暴露服务
+     * 基于单个协议，暴露服务（应用级别）
      *
      * @param protocolConfig 协议配置对象
      * @param registryURLs 注册中心链接对象数组
@@ -501,6 +502,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
                         }
 
                         // 使用 ProxyFactory 创建 Invoker 对象
+                        // 通过这样的方式，注册中心的 URL 中，包含了服务提供者的配置
                         Invoker<?> invoker = PROXY_FACTORY.getInvoker(ref, (Class) interfaceClass, registryURL.addParameterAndEncoded(EXPORT_KEY, url.toFullString()));
                         // 创建 DelegateProviderMetaDataInvoker 对象
                         DelegateProviderMetaDataInvoker wrapperInvoker = new DelegateProviderMetaDataInvoker(invoker, this);

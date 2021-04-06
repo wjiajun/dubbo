@@ -113,7 +113,7 @@ public abstract class AbstractZookeeperTransporter implements ZookeeperTransport
     List<String> getURLBackupAddress(URL url) {
         List<String> addressList = new ArrayList<String>();
         addressList.add(url.getAddress());
-        addressList.addAll(url.getParameter(RemotingConstants.BACKUP_KEY, Collections.EMPTY_LIST));
+        addressList.addAll(url.getParameter(RemotingConstants.BACKUP_KEY, Collections.emptyList()));
 
         String authPrefix = null;
         if (StringUtils.isNotEmpty(url.getUsername())) {
