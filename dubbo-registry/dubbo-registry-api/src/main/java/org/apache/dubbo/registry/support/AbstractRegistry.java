@@ -112,7 +112,17 @@ public abstract class AbstractRegistry implements Registry {
      * key：消费者的 URL ，例如消费者的 URL
      */
     private final ConcurrentMap<URL, Set<NotifyListener>> subscribed = new ConcurrentHashMap<>();
+    /**
+     * 被通知的 URL 集合
+     *
+     * key1：消费者的 URL ，例如消费者的 URL ，和 {@link #subscribed} 的键一致
+     * key2：分类，例如：providers、consumers、routes、configurators。【实际无 consumers ，因为消费者不会去订阅另外的消费者的列表】
+     *            在 {@link Constants} 中，以 "_CATEGORY" 结尾
+     */
     private final ConcurrentMap<URL, Map<String, List<URL>>> notified = new ConcurrentHashMap<>();
+    /**
+     * 注册中心 URL
+     */
     private URL registryUrl;
     // Local disk cache file
     private File file;
@@ -122,6 +132,7 @@ public abstract class AbstractRegistry implements Registry {
         if (url.getParameter(REGISTRY__LOCAL_FILE_CACHE_ENABLED, true)) {
             // Start file save timer
             syncSaveFile = url.getParameter(REGISTRY_FILESAVE_SYNC_KEY, false);
+            // 获得 `file`
             String defaultFilename = System.getProperty("user.home") + "/.dubbo/dubbo-registry-" + url.getParameter(APPLICATION_KEY) + "-" + url.getAddress().replaceAll(":", "-") + ".cache";
             String filename = url.getParameter(FILE_KEY, defaultFilename);
             File file = null;
@@ -136,7 +147,9 @@ public abstract class AbstractRegistry implements Registry {
             this.file = file;
             // When starting the subscription center,
             // we need to read the local cache file for future Registry fault tolerance processing.
+            // 加载本地磁盘缓存文件到内存缓存
             loadProperties();
+            // 通知监听器，URL 变化结果
             notify(url.getBackupUrls());
         }
     }
@@ -414,7 +427,7 @@ public abstract class AbstractRegistry implements Registry {
      *
      * @param url      consumer side url
      * @param listener listener
-     * @param urls     provider latest urls 通知的URL变化结果（全量数据）
+     * @param urls     provider latest urls 通知的URL变化结果（全量数据,指的是至少要是一个分类的全量，而不一定是全部数据）
      */
     protected void notify(URL url, NotifyListener listener, List<URL> urls) {
         if (url == null) {

@@ -333,6 +333,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         } else {
             urls.clear();
             // 定义直连地址，可以是服务提供者的地址，也可以是注册中心的地址
+            // 缓存注册中心
             if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
                 // 拆分地址成数组，使用 ";" 分隔
                 String[] us = SEMICOLON_SPLIT_PATTERN.split(url);

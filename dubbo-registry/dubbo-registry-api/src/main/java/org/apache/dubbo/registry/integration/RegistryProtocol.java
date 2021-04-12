@@ -423,7 +423,7 @@ public class RegistryProtocol implements Protocol {
     private URL getUrlToRegistry(final URL providerUrl, final URL registryUrl) {
         //The address you see at the registry
         // 从注册中心的 export 参数中，获得服务提供者的 URL
-        if (!registryUrl.getParameter(SIMPLIFIED_KEY, false)) {
+        if (!registryUrl.getParameter(SIMPLIFIED_KEY, false)) {// 判断是否设置元数据中心
             // 移除 .hide 为前缀的参数
             return providerUrl.removeParameters(getFilteredKeys(providerUrl)).removeParameters(
                     MONITOR_KEY, BIND_IP_KEY, BIND_PORT_KEY, QOS_ENABLE, QOS_HOST, QOS_PORT, ACCEPT_FOREIGN_IP, VALIDATION_KEY,
@@ -497,7 +497,7 @@ public class RegistryProtocol implements Protocol {
         // 分组聚合，参见文档 http://dubbo.apache.org/zh-cn/docs/user/demos/group-merger.html
         if (group != null && group.length() > 0) {
             if ((COMMA_SPLIT_PATTERN.split(group)).length > 1 || "*".equals(group)) {
-                // 执行服务引用
+                // 执行服务引用`
                 return doRefer(Cluster.getCluster(MergeableCluster.NAME), registry, type, url);
             }
         }

@@ -27,7 +27,7 @@ import java.util.concurrent.CompletableFuture;
 
 @Component("demoServiceComponent")
 public class DemoServiceComponent implements DemoService {
-    @Reference(mock = "return empty")
+    @Reference(mock = "return empty", async = true)
     private DemoService demoService;
 
     @Override

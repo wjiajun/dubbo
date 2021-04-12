@@ -68,6 +68,9 @@ public class ZookeeperRegistry extends FailbackRegistry {
      */
     private final static String DEFAULT_ROOT = "dubbo";
 
+    /**
+     * Zookeeper 根节点
+     */
     private final String root;
 
     /**
@@ -80,6 +83,9 @@ public class ZookeeperRegistry extends FailbackRegistry {
      */
     private final ConcurrentMap<URL, ConcurrentMap<NotifyListener, ChildListener>> zkListeners = new ConcurrentHashMap<>();
 
+    /**
+     * Zookeeper 客户端
+     */
     private final ZookeeperClient zkClient;
 
     public ZookeeperRegistry(URL url, ZookeeperTransporter zookeeperTransporter) {
@@ -93,6 +99,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
             group = PATH_SEPARATOR + group;
         }
         this.root = group;
+        // 创建 Zookeeper Client
         zkClient = zookeeperTransporter.connect(url);
         // 添加 StateListener 对象。该监听器，在重连时，调用恢复方法。
         zkClient.addStateListener((state) -> {
@@ -189,13 +196,16 @@ public class ZookeeperRegistry extends FailbackRegistry {
                 }
             // 处理指定 Service 层的发起订阅，例如服务消费者的订阅
             } else {
-                // 子节点数据数组
+                // 子节点数据数组(Service 层下的所有 URL)
                 List<URL> urls = new ArrayList<>();
                 // 循环分类数组
                 for (String path : toCategoriesPath(url)) {
                     // 获得 url 对应的监听器集合
                     ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
-                    ChildListener zkListener = listeners.computeIfAbsent(listener, k -> (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, k, toUrlsWithEmpty(url, parentPath, currentChilds)));
+                    // 获得 ChildListener 对象
+                    ChildListener zkListener = listeners.computeIfAbsent(listener,// 不存在 ChildListener 对象，进行创建 ChildListener 对象
+                            // 变更时，调用 `#notify(...)` 方法，回调 NotifyListener
+                            k -> (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, k, toUrlsWithEmpty(url, parentPath, currentChilds)));
                     // 创建 Type 节点。该节点为持久节点。
                     zkClient.create(path, false);
                     // 向 Zookeeper ，PATH 节点，发起订阅
@@ -254,6 +264,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     providers.addAll(children);
                 }
             }
+            // 匹配
             return toUrlsWithoutEmpty(url, providers);
         } catch (Throwable e) {
             throw new RpcException("Failed to lookup " + url + " from zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
@@ -274,7 +285,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
     /**
      * 获得服务路径
      *
-     * Root + Type
+     * Root + service
      *
      * @param url URL
      * @return 服务路径
@@ -296,12 +307,14 @@ public class ZookeeperRegistry extends FailbackRegistry {
      * @return 分类路径
      */
     private String[] toCategoriesPath(URL url) {
+        // 获得分类数组
         String[] categories;
         if (ANY_VALUE.equals(url.getParameter(CATEGORY_KEY))) {
             categories = new String[]{PROVIDERS_CATEGORY, CONSUMERS_CATEGORY, ROUTERS_CATEGORY, CONFIGURATORS_CATEGORY};
         } else {
             categories = url.getParameter(CATEGORY_KEY, new String[]{DEFAULT_CATEGORY});
         }
+        // 获得分类路径数组
         String[] paths = new String[categories.length];
         for (int i = 0; i < categories.length; i++) {
                 paths[i] = toServicePath(url) + PATH_SEPARATOR + categories[i];
@@ -310,6 +323,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
     }
 
     private String toCategoryPath(URL url) {
+        // root + service + type
         return toServicePath(url) + PATH_SEPARATOR + url.getParameter(CATEGORY_KEY, DEFAULT_CATEGORY);
     }
 
@@ -362,6 +376,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
     private List<URL> toUrlsWithEmpty(URL consumer, String path, List<String> providers) {
         // 获得 providers 中，和 consumer 匹配的 URL 数组
         List<URL> urls = toUrlsWithoutEmpty(consumer, providers);
+        // 若不存在匹配，则创建 `empty://` 的 URL返回
         if (urls == null || urls.isEmpty()) {
             int i = path.lastIndexOf(PATH_SEPARATOR);
             String category = i < 0 ? path : path.substring(i + 1);

@@ -71,6 +71,7 @@ public class ProtocolListenerWrapper implements Protocol {
 
     @Override
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        // 注册中心协议
         if (UrlUtils.isRegistry(url)) {
             // 引用服务
             return protocol.refer(type, url);

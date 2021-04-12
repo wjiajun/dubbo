@@ -62,6 +62,9 @@ public abstract class ReferenceConfigBase<T> extends AbstractReferenceConfig {
      */
     /**
      * 直连服务提供者地址
+     *
+     * 1. 可以是注册中心，也可以是服务提供者
+     * 2. 可配置多个，使用 ; 分隔
      */
     protected String url;
 
