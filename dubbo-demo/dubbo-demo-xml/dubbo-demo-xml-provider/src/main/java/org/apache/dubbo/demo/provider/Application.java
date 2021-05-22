@@ -16,12 +16,14 @@
  */
 package org.apache.dubbo.demo.provider;
 
+import org.apache.dubbo.demo.DemoService;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 public class Application {
     public static void main(String[] args) throws Exception {
         ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("spring/dubbo-provider.xml");
         context.start();
+        Object demoService = context.getBean("demoService");
         System.in.read();
     }
 }

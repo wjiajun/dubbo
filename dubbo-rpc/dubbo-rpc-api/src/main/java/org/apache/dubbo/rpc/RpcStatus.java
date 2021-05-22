@@ -16,6 +16,7 @@
  */
 package org.apache.dubbo.rpc;
 
+import com.alibaba.fastjson.JSONObject;
 import org.apache.dubbo.common.URL;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -150,6 +151,9 @@ public class RpcStatus {
                 break;
             }
         }
+        System.out.println("==================================");
+        System.out.println(JSONObject.toJSONString(methodStatus));
+        System.out.println("==================================");
         appStatus.active.incrementAndGet();
         return true;
     }

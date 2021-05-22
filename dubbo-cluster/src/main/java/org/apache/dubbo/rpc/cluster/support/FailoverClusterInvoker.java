@@ -92,7 +92,7 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 // RPC 调用得到 Result
                 Result result = invoker.invoke(invocation);
                 // 重试过程中，将最后一次调用的异常信息以 warn 级别日志输出
-                if (le != null && logger.isWarnEnabled()) {
+                if (le != null &&   logger.isWarnEnabled()) {
                     logger.warn("Although retry the method " + methodName
                             + " in the service " + getInterface().getName()
                             + " was successful by the provider " + invoker.getUrl().getAddress()

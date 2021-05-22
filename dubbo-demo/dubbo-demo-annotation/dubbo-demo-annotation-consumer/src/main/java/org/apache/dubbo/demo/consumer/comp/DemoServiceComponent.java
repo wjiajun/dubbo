@@ -23,16 +23,22 @@ import org.apache.dubbo.demo.DemoService;
 import org.apache.dubbo.rpc.Protocol;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Component("demoServiceComponent")
 public class DemoServiceComponent implements DemoService {
-    @Reference(mock = "return empty", async = true)
+    @Reference(mock = "return empty")
     private DemoService demoService;
 
     @Override
     public String sayHello(String name) {
         return demoService.sayHello(name);
+    }
+
+    @Override
+    public String sayHello(List<String> names) {
+        return demoService.sayHello(names);
     }
 
     @Override

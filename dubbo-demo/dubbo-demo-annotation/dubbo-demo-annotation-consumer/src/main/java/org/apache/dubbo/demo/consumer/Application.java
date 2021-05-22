@@ -16,6 +16,7 @@
  */
 package org.apache.dubbo.demo.consumer;
 
+import com.google.common.collect.Lists;
 import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
 import org.apache.dubbo.demo.DemoService;
 import org.apache.dubbo.demo.consumer.comp.DemoServiceComponent;
@@ -30,12 +31,17 @@ public class Application {
      * In order to make sure multicast registry works, need to specify '-Djava.net.preferIPv4Stack=true' before
      * launch the application
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(ConsumerConfiguration.class);
         context.start();
         DemoService service = context.getBean("demoServiceComponent", DemoServiceComponent.class);
+        System.out.println("第一次调用................");
         String hello = service.sayHello("world");
+        Thread.sleep(5000);
+        System.out.println("第二次调用................");
+        String s = service.sayHello(Lists.newArrayList("123"));
         System.out.println("result :" + hello);
+        System.out.println("result1 :" + s);
     }
 
     @Configuration

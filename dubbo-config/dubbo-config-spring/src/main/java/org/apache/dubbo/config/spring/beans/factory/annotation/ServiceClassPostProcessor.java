@@ -152,10 +152,10 @@ public class ServiceClassPostProcessor implements BeanDefinitionRegistryPostProc
                 new DubboClassPathBeanDefinitionScanner(registry, environment, resourceLoader);
         // <1.2> 获得 BeanNameGenerator 对象，并设置 beanNameGenerator 到 scanner 中
         BeanNameGenerator beanNameGenerator = resolveBeanNameGenerator(registry);
-        // <1.3> 设置过滤获得带有 @Service 注解的类
         scanner.setBeanNameGenerator(beanNameGenerator);
 
         // refactor @since 2.7.7
+
         serviceAnnotationTypes.forEach(annotationType -> {
             scanner.addIncludeFilter(new AnnotationTypeFilter(annotationType));
         });
