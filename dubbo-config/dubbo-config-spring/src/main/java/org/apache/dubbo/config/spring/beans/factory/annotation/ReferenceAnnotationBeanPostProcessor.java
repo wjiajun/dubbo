@@ -16,6 +16,8 @@
  */
 package org.apache.dubbo.config.spring.beans.factory.annotation;
 
+import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.apache.dubbo.config.annotation.Reference;
@@ -24,6 +26,7 @@ import org.apache.dubbo.config.spring.ReferenceBean;
 import org.apache.dubbo.config.spring.ServiceBean;
 
 import com.alibaba.spring.beans.factory.annotation.AbstractAnnotationBeanPostProcessor;
+import com.alibaba.spring.util.AnnotationUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.InjectionMetadata;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -31,15 +34,25 @@ import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.annotation.AnnotationAttributes;
+import org.springframework.util.ObjectUtils;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 import static com.alibaba.spring.util.AnnotationUtils.getAttribute;
 import static com.alibaba.spring.util.AnnotationUtils.getAttributes;
@@ -56,7 +69,9 @@ import static org.springframework.util.StringUtils.hasText;
  * @since 2.5.7
  */
 public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBeanPostProcessor implements
-        ApplicationContextAware {
+        ApplicationContextAware, ApplicationListener {
+
+    private static final Logger logger = LoggerFactory.getLogger(ReferenceAnnotationBeanPostProcessor.class);
 
     /**
      * The bean name of {@link ReferenceAnnotationBeanPostProcessor}
@@ -68,11 +83,6 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      */
     private static final int CACHE_SIZE = Integer.getInteger(BEAN_NAME + ".cache.size", 32);
 
-    /**
-     * ReferenceBean 缓存 Map
-     *
-     * KEY：Reference Bean 的名字
-     */
     private final ConcurrentMap<String, ReferenceBean<?>> referenceBeanCache =
             new ConcurrentHashMap<>(CACHE_SIZE);
 
@@ -83,6 +93,8 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
             new ConcurrentHashMap<>(CACHE_SIZE);
 
     private ApplicationContext applicationContext;
+
+    private static Map<String, TreeSet<String>> referencedBeanNameIdx = new HashMap<>();
 
     /**
      * {@link com.alibaba.dubbo.config.annotation.Reference @com.alibaba.dubbo.config.annotation.Reference} has been supported since 2.7.3
@@ -129,25 +141,26 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         /**
          * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
          */
-        // <1> 获得 Reference Bean 的名字
         String referencedBeanName = buildReferencedBeanName(attributes, injectedType);
 
         /**
          * The name of bean that is declared by {@link Reference @Reference} annotation injection
          */
         String referenceBeanName = getReferenceBeanName(attributes, injectedType);
-        // <2> 创建 ReferenceBean 对象
+
+        referencedBeanNameIdx.computeIfAbsent(referencedBeanName, k -> new TreeSet<String>()).add(referenceBeanName);
+
         ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referenceBeanName, attributes, injectedType);
 
         boolean localServiceBean = isLocalServiceBean(referencedBeanName, referenceBean, attributes);
 
         prepareReferenceBean(referencedBeanName, referenceBean, localServiceBean);
 
-        registerReferenceBean(referencedBeanName, referenceBean, attributes, localServiceBean, injectedType);
-        // <3> 缓存到 injectedFieldReferenceBeanCache or injectedMethodReferenceBeanCache 中
+        registerReferenceBean(referencedBeanName, referenceBean, localServiceBean, referenceBeanName);
+
         cacheInjectedReferenceBean(referenceBean, injectedElement);
-        // <4> 创建 Proxy 代理对象
-        return referenceBean.get();
+
+        return getBeanFactory().applyBeanPostProcessorsAfterInitialization(referenceBean.get(), referenceBeanName);
     }
 
     /**
@@ -161,17 +174,14 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      * @since 2.7.3
      */
     private void registerReferenceBean(String referencedBeanName, ReferenceBean referenceBean,
-                                       AnnotationAttributes attributes,
-                                       boolean localServiceBean, Class<?> interfaceClass) {
+                                       boolean localServiceBean, String beanName) {
 
         ConfigurableListableBeanFactory beanFactory = getBeanFactory();
-
-        String beanName = getReferenceBeanName(attributes, interfaceClass);
 
         if (localServiceBean) {  // If @Service bean is local one
             /**
              * Get  the @Service's BeanDefinition from {@link BeanFactory}
-             * Refer to {@link ServiceAnnotationBeanPostProcessor#buildServiceBeanDefinition}
+             * Refer to {@link ServiceClassPostProcessor#buildServiceBeanDefinition}
              */
             AbstractBeanDefinition beanDefinition = (AbstractBeanDefinition) beanFactory.getBeanDefinition(referencedBeanName);
             RuntimeBeanReference runtimeBeanReference = (RuntimeBeanReference) beanDefinition.getPropertyValues().get("ref");
@@ -218,9 +228,16 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         if (!attributes.isEmpty()) {
             beanNameBuilder.append('(');
             for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+                String value;
+                if ("parameters".equals(entry.getKey())) {
+                    ArrayList<String> pairs = getParameterPairs(entry);
+                    value = convertAttribute(pairs.stream().sorted().toArray());
+                } else {
+                    value = convertAttribute(entry.getValue());
+                }
                 beanNameBuilder.append(entry.getKey())
                         .append('=')
-                        .append(entry.getValue())
+                        .append(value)
                         .append(',');
             }
             // replace the latest "," to be ")"
@@ -230,6 +247,38 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         beanNameBuilder.append(" ").append(interfaceClass.getName());
 
         return beanNameBuilder.toString();
+    }
+
+    private ArrayList<String> getParameterPairs(Map.Entry<String, Object> entry) {
+        String[] entryValues = (String[]) entry.getValue();
+        ArrayList<String> pairs = new ArrayList<>();
+        // parameters spec is {key1,value1,key2,value2}
+        for (int i = 0; i < entryValues.length / 2 * 2; i = i + 2) {
+            pairs.add(entryValues[i] + "=" + entryValues[i + 1]);
+        }
+        return pairs;
+    }
+
+    private String convertAttribute(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof Annotation) {
+            AnnotationAttributes attributes = AnnotationUtils.getAnnotationAttributes((Annotation) obj, true);
+            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+                entry.setValue(convertAttribute(entry.getValue()));
+            }
+            return String.valueOf(attributes);
+        } else if (obj.getClass().isArray()) {
+            Object[] array = ObjectUtils.toObjectArray(obj);
+            String[] newArray = new String[array.length];
+            for (int i = 0; i < array.length; i++) {
+                newArray[i] = convertAttribute(array[i]);
+            }
+            return Arrays.toString(Arrays.stream(newArray).sorted().toArray());
+        } else {
+            return String.valueOf(obj);
+        }
     }
 
     /**
@@ -306,7 +355,6 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      * @return The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
      */
     private String buildReferencedBeanName(AnnotationAttributes attributes, Class<?> serviceInterfaceType) {
-        // 创建 Service Bean 的名字
         ServiceBeanNameBuilder serviceBeanNameBuilder = create(attributes, serviceInterfaceType, getEnvironment());
         return serviceBeanNameBuilder.build();
     }
@@ -315,14 +363,13 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
                                                      Class<?> referencedType)
             throws Exception {
 
-        // 首先，从 referenceBeanCache 缓存中，获得 referencedBeanName 对应的 ReferenceBean 对象
         ReferenceBean<?> referenceBean = referenceBeanCache.get(referenceBeanName);
 
-        // 然后，如果不存在，则进行创建。然后，添加到 referenceBeanCache 缓存中。
         if (referenceBean == null) {
             ReferenceBeanBuilder beanBuilder = ReferenceBeanBuilder
                     .create(attributes, applicationContext)
-                    .interfaceClass(referencedType);
+                    .interfaceClass(referencedType)
+                    .beanName(referenceBeanName);
             referenceBean = beanBuilder.build();
             referenceBeanCache.put(referenceBeanName, referenceBean);
         } else if (!referencedType.isAssignableFrom(referenceBean.getInterfaceClass())) {
@@ -349,9 +396,19 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
     @Override
     public void destroy() throws Exception {
         super.destroy();
-        // 清空缓存
         this.referenceBeanCache.clear();
         this.injectedFieldReferenceBeanCache.clear();
         this.injectedMethodReferenceBeanCache.clear();
+    }
+
+    @Override
+    public void onApplicationEvent(ApplicationEvent event) {
+        if (event instanceof ContextRefreshedEvent) {
+            referencedBeanNameIdx.entrySet().stream().filter(e -> e.getValue().size() > 1).forEach(e -> {
+                String logPrefix = e.getKey() + " has " + e.getValue().size() + " reference instances, there are: ";
+                logger.warn(e.getValue().stream().collect(Collectors.joining(", ", logPrefix, "")));
+            });
+            referencedBeanNameIdx.clear();
+        }
     }
 }

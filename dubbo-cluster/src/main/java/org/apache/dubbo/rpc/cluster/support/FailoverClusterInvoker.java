@@ -60,10 +60,7 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
         checkInvokers(copyInvokers, invocation);
         // 得到最大可调用次数：最大可重试次数+1，默认最大可重试次数Constants.DEFAULT_RETRIES=2
         String methodName = RpcUtils.getMethodName(invocation);
-        int len = getUrl().getMethodParameter(methodName, RETRIES_KEY, DEFAULT_RETRIES) + 1;
-        if (len <= 0) {
-            len = 1;
-        }
+        int len = calculateInvokeTimes(methodName);
         // retry loop.
         // 保存最后一次调用的异常
         RpcException le = null; // last exception.
@@ -126,6 +123,21 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 + " on the consumer " + NetUtils.getLocalHost() + " using the dubbo version "
                 + Version.getVersion() + ". Last error is: "
                 + le.getMessage(), le.getCause() != null ? le.getCause() : le);
+    }
+
+    private int calculateInvokeTimes(String methodName) {
+        int len = getUrl().getMethodParameter(methodName, RETRIES_KEY, DEFAULT_RETRIES) + 1;
+        RpcContext rpcContext = RpcContext.getContext();
+        Object retry = rpcContext.getObjectAttachment(RETRIES_KEY);
+        if (null != retry && retry instanceof Number) {
+            len = ((Number) retry).intValue() + 1;
+            rpcContext.removeAttachment(RETRIES_KEY);
+        }
+        if (len <= 0) {
+            len = 1;
+        }
+
+        return len;
     }
 
 }

@@ -36,6 +36,7 @@ import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.config.utils.ConfigValidationUtils;
 import org.apache.dubbo.event.Event;
 import org.apache.dubbo.event.EventDispatcher;
+import org.apache.dubbo.registry.client.metadata.MetadataUtils;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Protocol;
 import org.apache.dubbo.rpc.ProxyFactory;
@@ -67,9 +68,11 @@ import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SEPARATOR_
 import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
 import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.LOCALHOST_VALUE;
+import static org.apache.dubbo.common.constants.CommonConstants.METADATA_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.METHODS_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.MONITOR_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PROXY_CLASS_REF;
+import static org.apache.dubbo.common.constants.CommonConstants.REMOTE_METADATA_STORAGE_TYPE;
 import static org.apache.dubbo.common.constants.CommonConstants.REVISION_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.SEMICOLON_SPLIT_PATTERN;
 import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
@@ -77,6 +80,7 @@ import static org.apache.dubbo.common.constants.RegistryConstants.SUBSCRIBED_SER
 import static org.apache.dubbo.common.utils.NetUtils.isInvalidLocalHost;
 import static org.apache.dubbo.common.utils.StringUtils.splitToSet;
 import static org.apache.dubbo.config.Constants.DUBBO_IP_TO_REGISTRY;
+import static org.apache.dubbo.registry.Constants.CONSUMER_PROTOCOL;
 import static org.apache.dubbo.registry.Constants.REGISTER_IP_KEY;
 import static org.apache.dubbo.rpc.Constants.LOCAL_PROTOCOL;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
@@ -103,9 +107,6 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
      * Actually，when the {@link ExtensionLoader} init the {@link Protocol} instants,it will automatically wraps two
      * layers, and eventually will get a <b>ProtocolFilterWrapper</b> or <b>ProtocolListenerWrapper</b>
      */
-    /**
-     * 自适应 Protocol 实现对象
-     */
     private static final Protocol REF_PROTOCOL = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
 
     /**
@@ -117,9 +118,6 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
     /**
      * A {@link ProxyFactory} implementation that will generate a reference service's proxy,the JavassistProxyFactory is
      * its default implementation
-     */
-    /**
-     * 自适应 ProxyFactory 实现对象
      */
     private static final ProxyFactory PROXY_FACTORY = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
 
@@ -172,6 +170,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
      * @see RegistryConstants#SUBSCRIBED_SERVICE_NAMES_KEY
      * @since 2.7.8
      */
+    @Deprecated
     @Parameter(key = SUBSCRIBED_SERVICE_NAMES_KEY)
     public String getServices() {
         return services;
@@ -183,6 +182,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
      * @return the String {@link List} presenting the Dubbo interface subscribed
      * @since 2.7.8
      */
+    @Deprecated
     @Parameter(excluded = true)
     public Set<String> getSubscribedServices() {
         return splitToSet(getServices(), COMMA_SEPARATOR_CHAR);
@@ -208,6 +208,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         return ref;
     }
 
+    @Override
     public synchronized void destroy() {
         if (ref == null) {
             return;
@@ -219,7 +220,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         try {
             invoker.destroy();
         } catch (Throwable t) {
-            logger.warn("Unexpected error occured when destroy invoker of ReferenceConfig(" + url + ").", t);
+            logger.warn("Unexpected error occurred when destroy invoker of ReferenceConfig(" + url + ").", t);
         }
         invoker = null;
         ref = null;
@@ -233,9 +234,14 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             return;
         }
 
+
         if (bootstrap == null) {
             bootstrap = DubboBootstrap.getInstance();
-            bootstrap.init();
+            // compatible with api call.
+            if (null != this.getRegistries()) {
+                bootstrap.registries(this.getRegistries());
+            }
+            bootstrap.initialize();
         }
 
         checkAndUpdateSubConfigs();
@@ -269,6 +275,10 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         // appendParameters(map, consumer, Constants.DEFAULT_KEY);
         AbstractConfig.appendParameters(map, consumer);
         AbstractConfig.appendParameters(map, this);
+        MetadataReportConfig metadataReportConfig = getMetadataReportConfig();
+        if (metadataReportConfig != null && metadataReportConfig.isValid()) {
+            map.putIfAbsent(METADATA_KEY, REMOTE_METADATA_STORAGE_TYPE);
+        }
         Map<String, AsyncMethodInfo> attributes = null;
         if (CollectionUtils.isNotEmpty(getMethods())) {
             attributes = new HashMap<>();
@@ -293,7 +303,8 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         if (StringUtils.isEmpty(hostToRegistry)) {
             hostToRegistry = NetUtils.getLocalHost();
         } else if (isInvalidLocalHost(hostToRegistry)) {
-            throw new IllegalArgumentException("Specified invalid registry ip from property:" + DUBBO_IP_TO_REGISTRY + ", value:" + hostToRegistry);
+            throw new IllegalArgumentException(
+                    "Specified invalid registry ip from property:" + DUBBO_IP_TO_REGISTRY + ", value:" + hostToRegistry);
         }
         map.put(REGISTER_IP_KEY, hostToRegistry);
 
@@ -309,93 +320,75 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
 
         initialized = true;
 
+        checkInvokerAvailable();
+
         // dispatch a ReferenceConfigInitializedEvent since 2.7.4
         dispatch(new ReferenceConfigInitializedEvent(this, invoker));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
-    /**
-     * 创建 Service 代理对象
-     *
-     * @param map 集合
-     * @return 代理对象
-     */
     private T createProxy(Map<String, String> map) {
         if (shouldJvmRefer(map)) {
-            // 创建服务引用 URL 对象
             URL url = new URL(LOCAL_PROTOCOL, LOCALHOST_VALUE, 0, interfaceClass.getName()).addParameters(map);
-            // 引用服务，返回 Invoker 对象(将service接口转invoker)
             invoker = REF_PROTOCOL.refer(interfaceClass, url);
             if (logger.isInfoEnabled()) {
                 logger.info("Using injvm service " + interfaceClass.getName());
             }
-        // 正常流程，一般为远程引用
         } else {
             urls.clear();
-            // 定义直连地址，可以是服务提供者的地址，也可以是注册中心的地址
-            // 缓存注册中心
             if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
-                // 拆分地址成数组，使用 ";" 分隔
                 String[] us = SEMICOLON_SPLIT_PATTERN.split(url);
-                // 循环数组，添加到 `url` 中。
                 if (us != null && us.length > 0) {
                     for (String u : us) {
-                        // 创建 URL 对象
                         URL url = URL.valueOf(u);
-                        // 设置默认路径
                         if (StringUtils.isEmpty(url.getPath())) {
                             url = url.setPath(interfaceName);
                         }
-                        // 注册中心的地址，带上服务引用的配置参数
                         if (UrlUtils.isRegistry(url)) {
                             urls.add(url.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
-                        // 服务提供者的地址
                         } else {
                             urls.add(ClusterUtils.mergeUrl(url, map));
                         }
                     }
                 }
-            // 注册中心
             } else { // assemble URL from register center's configuration
                 // if protocols not injvm checkRegistry
                 if (!LOCAL_PROTOCOL.equalsIgnoreCase(getProtocol())) {
                     checkRegistry();
-                    // 加载注册中心 URL 数组
                     List<URL> us = ConfigValidationUtils.loadRegistries(this, false);
-                    // 循环数组，添加到 `url` 中。
                     if (CollectionUtils.isNotEmpty(us)) {
                         for (URL u : us) {
-                            // 加载监控中心 URL
                             URL monitorUrl = ConfigValidationUtils.loadMonitor(this, u);
-                            // 服务引用配置对象 `map`，带上监控中心的 URL
                             if (monitorUrl != null) {
                                 map.put(MONITOR_KEY, URL.encode(monitorUrl.toFullString()));
                             }
-                            // 注册中心的地址，带上服务引用的配置参数
                             urls.add(u.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
                         }
                     }
                     if (urls.isEmpty()) {
-                        throw new IllegalStateException("No such any registry to reference " + interfaceName + " on the consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion() + ", please config <dubbo:registry address=\"...\" /> to your spring config.");
+                        throw new IllegalStateException(
+                                "No such any registry to reference " + interfaceName + " on the consumer " + NetUtils.getLocalHost() +
+                                        " use dubbo version " + Version.getVersion() +
+                                        ", please config <dubbo:registry address=\"...\" /> to your spring config.");
                     }
                 }
             }
 
-            // 单 `urls` 时，引用服务，返回 Invoker 对象
             if (urls.size() == 1) {
-                // 引用服务
                 invoker = REF_PROTOCOL.refer(interfaceClass, urls.get(0));
             } else {
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
                 for (URL url : urls) {
-                    // 引用服务
+                    // For multi-registry scenarios, it is not checked whether each referInvoker is available.
+                    // Because this invoker may become available later.
                     invokers.add(REF_PROTOCOL.refer(interfaceClass, url));
-                    // 使用最后一个注册中心的 URL
+
                     if (UrlUtils.isRegistry(url)) {
                         registryURL = url; // use last registry url
                     }
                 }
+
                 if (registryURL != null) { // registry url is available
                     // for multi-subscription scenario, use 'zone-aware' policy by default
                     String cluster = registryURL.getParameter(CLUSTER_KEY, ZoneAwareCluster.NAME);
@@ -403,13 +396,27 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                     invoker = Cluster.getCluster(cluster, false).join(new StaticDirectory(registryURL, invokers));
                 } else { // not a registry url, must be direct invoke.
                     String cluster = CollectionUtils.isNotEmpty(invokers)
-                            ? (invokers.get(0).getUrl() != null ? invokers.get(0).getUrl().getParameter(CLUSTER_KEY, ZoneAwareCluster.NAME) : Cluster.DEFAULT)
+                            ?
+                            (invokers.get(0).getUrl() != null ? invokers.get(0).getUrl().getParameter(CLUSTER_KEY, ZoneAwareCluster.NAME) :
+                                    Cluster.DEFAULT)
                             : Cluster.DEFAULT;
                     invoker = Cluster.getCluster(cluster).join(new StaticDirectory(invokers));
                 }
             }
         }
 
+        if (logger.isInfoEnabled()) {
+            logger.info("Refer dubbo service " + interfaceClass.getName() + " from url " + invoker.getUrl());
+        }
+
+        URL consumerURL = new URL(CONSUMER_PROTOCOL, map.remove(REGISTER_IP_KEY), 0, map.get(INTERFACE_KEY), map);
+        MetadataUtils.publishServiceDefinition(consumerURL);
+
+        // create service proxy
+        return (T) PROXY_FACTORY.getProxy(invoker, ProtocolUtils.isGeneric(generic));
+    }
+
+    private void checkInvokerAvailable() throws IllegalStateException {
         if (shouldCheck() && !invoker.isAvailable()) {
             invoker.destroy();
             throw new IllegalStateException("Failed to check the status of the service "
@@ -423,12 +430,6 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                     + " to the consumer "
                     + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion());
         }
-        if (logger.isInfoEnabled()) {
-            logger.info("Refer dubbo service " + interfaceClass.getName() + " from url " + invoker.getUrl());
-        }
-        // create service proxy
-        // 创建 Service 代理对象
-        return (T) PROXY_FACTORY.getProxy(invoker, ProtocolUtils.isGeneric(generic));
     }
 
     /**
@@ -440,13 +441,14 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             throw new IllegalStateException("<dubbo:reference interface=\"\" /> interface not allow null!");
         }
         completeCompoundConfigs(consumer);
-        if (consumer != null) {
-            if (StringUtils.isEmpty(registryIds)) {
-                setRegistryIds(consumer.getRegistryIds());
-            }
-        }
         // get consumer's global configuration
         checkDefault();
+
+        // init some null configuration.
+        List<ConfigInitializer> configInitializers = ExtensionLoader.getExtensionLoader(ConfigInitializer.class)
+                .getActivateExtension(URL.valueOf("configInitializer://"), (String[]) null);
+        configInitializers.forEach(e -> e.initReferConfig(this));
+
         this.refresh();
         if (getGeneric() == null && getConsumer() != null) {
             setGeneric(getConsumer().getGeneric());
@@ -463,12 +465,8 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             checkInterfaceAndMethods(interfaceClass, getMethods());
         }
 
-        //init serivceMetadata
-        serviceMetadata.setVersion(getVersion());
-        serviceMetadata.setGroup(getGroup());
-        serviceMetadata.setDefaultGroup(getGroup());
+        initServiceMetadata(consumer);
         serviceMetadata.setServiceType(getActualInterface());
-        serviceMetadata.setServiceInterfaceName(interfaceName);
         // TODO, uncomment this line once service key is unified
         serviceMetadata.setServiceKey(URL.buildKey(interfaceName, group, version));
 
@@ -497,16 +495,13 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
      */
     protected boolean shouldJvmRefer(Map<String, String> map) {
         URL tmpUrl = new URL("temp", "localhost", 0, map);
-        // 是否本地引用
         boolean isJvmRefer;
-        // injvm 属性为空，不通过该属性判断
         if (isInjvm() == null) {
             // if a url is specified, don't do local reference
             if (url != null && url.length() > 0) {
                 isJvmRefer = false;
             } else {
                 // by default, reference local service if there is
-                // 通过 `tmpUrl` 判断，是否需要本地引用
                 isJvmRefer = InjvmProtocol.getInjvmProtocol().isInjvmRefer(tmpUrl);
             }
         } else {

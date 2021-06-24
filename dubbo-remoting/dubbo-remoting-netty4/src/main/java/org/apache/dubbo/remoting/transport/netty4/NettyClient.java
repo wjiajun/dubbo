@@ -16,6 +16,16 @@
  */
 package org.apache.dubbo.remoting.transport.netty4;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.proxy.Socks5ProxyHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.logger.Logger;
@@ -28,21 +38,11 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.transport.AbstractClient;
 import org.apache.dubbo.remoting.utils.UrlUtils;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.proxy.Socks5ProxyHandler;
-import io.netty.handler.timeout.IdleStateHandler;
-
 import java.net.InetSocketAddress;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.dubbo.common.constants.CommonConstants.SSL_ENABLED_KEY;
+import static org.apache.dubbo.remoting.Constants.DEFAULT_CONNECT_TIMEOUT;
 import static org.apache.dubbo.remoting.transport.netty4.NettyEventLoopFactory.eventLoopGroup;
 import static org.apache.dubbo.remoting.transport.netty4.NettyEventLoopFactory.socketChannelClass;
 
@@ -55,7 +55,7 @@ public class NettyClient extends AbstractClient {
     /**
      * netty client bootstrap
      */
-    private static final EventLoopGroup NIO_EVENT_LOOP_GROUP = eventLoopGroup(Constants.DEFAULT_IO_THREADS, "NettyClientWorker");
+    private static final EventLoopGroup EVENT_LOOP_GROUP = eventLoopGroup(Constants.DEFAULT_IO_THREADS, "NettyClientWorker");
 
     private static final String SOCKS_PROXY_HOST = "socksProxyHost";
 
@@ -69,7 +69,6 @@ public class NettyClient extends AbstractClient {
      * current channel. Each successful invocation of {@link NettyClient#doConnect()} will
      * replace this with new channel and close old channel.
      * <b>volatile, please copy reference to use.</b>
-     * 因为客户端可能会断开重连，需要保证多线程的可见性
      */
     private volatile Channel channel;
 
@@ -90,24 +89,16 @@ public class NettyClient extends AbstractClient {
      */
     @Override
     protected void doOpen() throws Throwable {
-        // 创建 NettyClientHandler 对象
         final NettyClientHandler nettyClientHandler = new NettyClientHandler(getUrl(), this);
-        // 实例化 ServerBootstrap
         bootstrap = new Bootstrap();
-        bootstrap
-                // 设置它的线程组
-                .group(NIO_EVENT_LOOP_GROUP)
-                // 设置可选项
+        bootstrap.group(EVENT_LOOP_GROUP)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 //.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, getTimeout())
-                // 设置 Channel类型
                 .channel(socketChannelClass());
 
-        // 设置连接超时时间
-        bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.max(3000, getConnectTimeout()));
-        // 设置责任链路
+        bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.max(DEFAULT_CONNECT_TIMEOUT, getConnectTimeout()));
         bootstrap.handler(new ChannelInitializer<SocketChannel>() {
 
             @Override
@@ -120,11 +111,10 @@ public class NettyClient extends AbstractClient {
 
                 NettyCodecAdapter adapter = new NettyCodecAdapter(getCodec(), getUrl(), NettyClient.this);
                 ch.pipeline()//.addLast("logging",new LoggingHandler(LogLevel.INFO))//for debug
-                        // 设置责任链路
-                        .addLast("decoder", adapter.getDecoder())// 解码
-                        .addLast("encoder", adapter.getEncoder()) // 解码
+                        .addLast("decoder", adapter.getDecoder())
+                        .addLast("encoder", adapter.getEncoder())
                         .addLast("client-idle-handler", new IdleStateHandler(heartbeatInterval, 0, 0, MILLISECONDS))
-                        .addLast("handler", nettyClientHandler); // 处理器
+                        .addLast("handler", nettyClientHandler);
 
                 String socksProxyHost = ConfigUtils.getProperty(SOCKS_PROXY_HOST);
                 if(socksProxyHost != null) {
@@ -139,17 +129,13 @@ public class NettyClient extends AbstractClient {
     @Override
     protected void doConnect() throws Throwable {
         long start = System.currentTimeMillis();
-        // 连接服务器
         ChannelFuture future = bootstrap.connect(getConnectAddress());
         try {
-            // 等待连接成功或者超时
             boolean ret = future.awaitUninterruptibly(getConnectTimeout(), MILLISECONDS);
 
-            // 连接成功
             if (ret && future.isSuccess()) {
                 Channel newChannel = future.channel();
                 try {
-                    // 关闭老的连接
                     // Close old channel
                     // copy reference
                     Channel oldChannel = NettyClient.this.channel;
@@ -164,7 +150,6 @@ public class NettyClient extends AbstractClient {
                         }
                     }
                 } finally {
-                    // 若 NettyClient 被关闭，关闭连接
                     if (NettyClient.this.isClosed()) {
                         try {
                             if (logger.isInfoEnabled()) {
@@ -175,16 +160,13 @@ public class NettyClient extends AbstractClient {
                             NettyClient.this.channel = null;
                             NettyChannel.removeChannelIfDisconnected(newChannel);
                         }
-                    // 设置新连接
                     } else {
                         NettyClient.this.channel = newChannel;
                     }
                 }
-            // 发生异常，抛出 RemotingException 异常
             } else if (future.cause() != null) {
                 throw new RemotingException(this, "client(url: " + getUrl() + ") failed to connect to server "
                         + getRemoteAddress() + ", error message is:" + future.cause().getMessage(), future.cause());
-            // 无结果（连接超时），抛出 RemotingException 异常
             } else {
                 throw new RemotingException(this, "client(url: " + getUrl() + ") failed to connect to server "
                         + getRemoteAddress() + " client-side timeout "

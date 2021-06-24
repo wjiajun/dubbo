@@ -17,46 +17,22 @@
 package org.apache.dubbo.demo.provider;
 
 import org.apache.dubbo.config.annotation.DubboService;
-import org.apache.dubbo.config.annotation.Method;
 import org.apache.dubbo.demo.DemoService;
 import org.apache.dubbo.rpc.RpcContext;
-import org.apache.dubbo.rpc.cluster.loadbalance.RoundRobinLoadBalance;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.task.TaskRejectedException;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-@DubboService(methods = @Method(name = "sayHello", loadbalance = RoundRobinLoadBalance.NAME, executes = 20))
+@DubboService
 public class DemoServiceImpl implements DemoService {
     private static final Logger logger = LoggerFactory.getLogger(DemoServiceImpl.class);
 
     @Override
     public String sayHello(String name) {
-//        try {
-//            int i = 1/ 0;
-//        }catch (Exception e) {
-//            throw new TaskRejectedException("1");
-//        }
-        try {
-            Thread.sleep(Integer.MAX_VALUE - 1);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         logger.info("Hello " + name + ", request from consumer: " + RpcContext.getContext().getRemoteAddress());
         return "Hello " + name + ", response from provider: " + RpcContext.getContext().getLocalAddress();
-    }
-
-    @Override
-    public String sayHello(List<String> names) {
-        try {
-            Thread.sleep(Integer.MAX_VALUE);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        logger.info("Hello " + names + ", request from consumer: " + RpcContext.getContext().getRemoteAddress());
-        return "Hello " + names + ", response from provider: " + RpcContext.getContext().getLocalAddress();
     }
 
     @Override

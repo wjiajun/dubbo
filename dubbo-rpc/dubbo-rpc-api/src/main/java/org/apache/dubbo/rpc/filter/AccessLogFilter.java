@@ -19,7 +19,6 @@ package org.apache.dubbo.rpc.filter;
 import org.apache.dubbo.common.extension.Activate;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.ConcurrentHashSet;
 import org.apache.dubbo.common.utils.ConfigUtils;
 import org.apache.dubbo.common.utils.NamedThreadFactory;
 import org.apache.dubbo.rpc.Filter;
@@ -37,15 +36,14 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PROVIDER;
-import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
 import static org.apache.dubbo.rpc.Constants.ACCESS_LOG_KEY;
 
 /**
@@ -67,43 +65,21 @@ public class AccessLogFilter implements Filter {
 
     private static final Logger logger = LoggerFactory.getLogger(AccessLogFilter.class);
 
-    /**
-     * 访问日志在 {@link LoggerFactory} 中的日志名
-     */
     private static final String LOG_KEY = "dubbo.accesslog";
 
-    /**
-     * 队列大小，即 {@link #logQueue} 值的大小
-     */
+    private static final String LINE_SEPARATOR = "line.separator";
+
     private static final int LOG_MAX_BUFFER = 5000;
 
-    /**
-     * 日志输出频率，单位：毫秒。仅适用于 {@link #logFuture}
-     */
     private static final long LOG_OUTPUT_INTERVAL = 5000;
 
-    /**
-     * 访问日志的文件后缀
-     */
     private static final String FILE_DATE_FORMAT = "yyyyMMdd";
 
     // It's safe to declare it as singleton since it runs on single thread only
-    /**
-     * 日历的时间格式化
-     */
     private static final DateFormat FILE_NAME_FORMATTER = new SimpleDateFormat(FILE_DATE_FORMAT);
 
-    /**
-     * 日志队列
-     *
-     * key：访问日志名
-     * value：日志集合
-     */
-    private static final Map<String, Set<AccessLogData>> LOG_ENTRIES = new ConcurrentHashMap<>();
+    private static final Map<String, Queue<AccessLogData>> LOG_ENTRIES = new ConcurrentHashMap<>();
 
-    /**
-     * 定时任务线程池
-     */
     private static final ScheduledExecutorService LOG_SCHEDULED = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-Access-Log", true));
 
     /**
@@ -125,10 +101,10 @@ public class AccessLogFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation inv) throws RpcException {
         try {
-            // 记录访问日志的文件名
             String accessLogKey = invoker.getUrl().getParameter(ACCESS_LOG_KEY);
             if (ConfigUtils.isNotEmpty(accessLogKey)) {
-                AccessLogData logData = buildAccessLogData(invoker, inv);
+                AccessLogData logData = AccessLogData.newLogData(); 
+                logData.buildAccessLogData(invoker, inv);
                 log(accessLogKey, logData);
             }
         } catch (Throwable t) {
@@ -137,30 +113,24 @@ public class AccessLogFilter implements Filter {
         return invoker.invoke(inv);
     }
 
-    /**
-     * 添加日志内容到日志队列
-     *
-     * @param accessLog 日志文件
-     * @param accessLogData 日志内容
-     */
     private void log(String accessLog, AccessLogData accessLogData) {
-        Set<AccessLogData> logSet = LOG_ENTRIES.computeIfAbsent(accessLog, k -> new ConcurrentHashSet<>());
+        Queue<AccessLogData> logQueue = LOG_ENTRIES.computeIfAbsent(accessLog, k -> new ConcurrentLinkedQueue<>());
 
-        if (logSet.size() < LOG_MAX_BUFFER) {
-            logSet.add(accessLogData);
+        if (logQueue.size() < LOG_MAX_BUFFER) {
+            logQueue.add(accessLogData);
         } else {
             logger.warn("AccessLog buffer is full. Do a force writing to file to clear buffer.");
-            //just write current logSet to file.
-            writeLogSetToFile(accessLog, logSet);
-            //after force writing, add accessLogData to current logSet
-            logSet.add(accessLogData);
+            //just write current logQueue to file.
+            writeLogQueueToFile(accessLog, logQueue);
+            //after force writing, add accessLogData to current logQueue
+            logQueue.add(accessLogData);
         }
     }
 
-    private void writeLogSetToFile(String accessLog, Set<AccessLogData> logSet) {
+    private void writeLogQueueToFile(String accessLog, Queue<AccessLogData> logQueue) {
         try {
             if (ConfigUtils.isDefault(accessLog)) {
-                processWithServiceLogger(logSet);
+                processWithServiceLogger(logQueue);
             } else {
                 File file = new File(accessLog);
                 createIfLogDirAbsent(file);
@@ -168,7 +138,7 @@ public class AccessLogFilter implements Filter {
                     logger.debug("Append log to " + accessLog);
                 }
                 renameFile(file);
-                processWithAccessKeyLogger(logSet, file);
+                processWithAccessKeyLogger(logQueue, file);
             }
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
@@ -177,40 +147,28 @@ public class AccessLogFilter implements Filter {
 
     private void writeLogToFile() {
         if (!LOG_ENTRIES.isEmpty()) {
-            for (Map.Entry<String, Set<AccessLogData>> entry : LOG_ENTRIES.entrySet()) {
+            for (Map.Entry<String, Queue<AccessLogData>> entry : LOG_ENTRIES.entrySet()) {
                 String accessLog = entry.getKey();
-                Set<AccessLogData> logSet = entry.getValue();
-                writeLogSetToFile(accessLog, logSet);
+                Queue<AccessLogData> logQueue = entry.getValue();
+                writeLogQueueToFile(accessLog, logQueue);
             }
         }
     }
 
-    private void processWithAccessKeyLogger(Set<AccessLogData> logSet, File file) throws IOException {
+    private void processWithAccessKeyLogger(Queue<AccessLogData> logQueue, File file) throws IOException {
         try (FileWriter writer = new FileWriter(file, true)) {
-            for (Iterator<AccessLogData> iterator = logSet.iterator();
+            for (Iterator<AccessLogData> iterator = logQueue.iterator();
                  iterator.hasNext();
                  iterator.remove()) {
                 writer.write(iterator.next().getLogMessage());
-                writer.write(System.getProperty("line.separator"));
+                writer.write(System.getProperty(LINE_SEPARATOR));
             }
             writer.flush();
         }
     }
 
-    private AccessLogData buildAccessLogData(Invoker<?> invoker, Invocation inv) {
-        AccessLogData logData = AccessLogData.newLogData();
-        logData.setServiceName(invoker.getInterface().getName());
-        logData.setMethodName(inv.getMethodName());
-        logData.setVersion(invoker.getUrl().getParameter(VERSION_KEY));
-        logData.setGroup(invoker.getUrl().getParameter(GROUP_KEY));
-        logData.setInvocationTime(new Date());
-        logData.setTypes(inv.getParameterTypes());
-        logData.setArguments(inv.getArguments());
-        return logData;
-    }
-
-    private void processWithServiceLogger(Set<AccessLogData> logSet) {
-        for (Iterator<AccessLogData> iterator = logSet.iterator();
+    private void processWithServiceLogger(Queue<AccessLogData> logQueue) {
+        for (Iterator<AccessLogData> iterator = logQueue.iterator();
              iterator.hasNext();
              iterator.remove()) {
             AccessLogData logData = iterator.next();

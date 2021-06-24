@@ -20,6 +20,7 @@ import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.Activate;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.utils.ReflectUtils;
 import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
@@ -65,18 +66,11 @@ public class FutureFilter implements Filter, Filter.Listener {
         fireThrowCallback(invoker, invocation, t);
     }
 
-    /**
-     * 触发前置方法
-     *
-     * @param invoker Invoker 对象
-     * @param invocation Invocation 对象
-     */
     private void fireInvokeCallback(final Invoker<?> invoker, final Invocation invocation) {
         final AsyncMethodInfo asyncMethodInfo = getAsyncMethodInfo(invoker, invocation);
         if (asyncMethodInfo == null) {
             return;
         }
-        // 获得前置方法和对象
         final Method onInvokeMethod = asyncMethodInfo.getOninvokeMethod();
         final Object onInvokeInst = asyncMethodInfo.getOninvokeInstance();
 
@@ -86,11 +80,8 @@ public class FutureFilter implements Filter, Filter.Listener {
         if (onInvokeMethod == null || onInvokeInst == null) {
             throw new IllegalStateException("service:" + invoker.getUrl().getServiceKey() + " has a oninvoke callback config , but no such " + (onInvokeMethod == null ? "method" : "instance") + " found. url:" + invoker.getUrl());
         }
-        if (!onInvokeMethod.isAccessible()) {
-            onInvokeMethod.setAccessible(true);
-        }
 
-        // 调用前置方法
+        ReflectUtils.makeAccessible(onInvokeMethod);
         Object[] params = invocation.getArguments();
         try {
             onInvokeMethod.invoke(onInvokeInst, params);
@@ -107,7 +98,6 @@ public class FutureFilter implements Filter, Filter.Listener {
             return;
         }
 
-        // 获得 `onreturn` 方法和对象
         final Method onReturnMethod = asyncMethodInfo.getOnreturnMethod();
         final Object onReturnInst = asyncMethodInfo.getOnreturnInstance();
 
@@ -119,9 +109,7 @@ public class FutureFilter implements Filter, Filter.Listener {
         if (onReturnMethod == null || onReturnInst == null) {
             throw new IllegalStateException("service:" + invoker.getUrl().getServiceKey() + " has a onreturn callback config , but no such " + (onReturnMethod == null ? "method" : "instance") + " found. url:" + invoker.getUrl());
         }
-        if (!onReturnMethod.isAccessible()) {
-            onReturnMethod.setAccessible(true);
-        }
+        ReflectUtils.makeAccessible(onReturnMethod);
 
         Object[] args = invocation.getArguments();
         Object[] params;
@@ -149,7 +137,6 @@ public class FutureFilter implements Filter, Filter.Listener {
     }
 
     private void fireThrowCallback(final Invoker<?> invoker, final Invocation invocation, final Throwable exception) {
-        // 获得 `onthrow` 方法和对象
         final AsyncMethodInfo asyncMethodInfo = getAsyncMethodInfo(invoker, invocation);
         if (asyncMethodInfo == null) {
             return;
@@ -165,9 +152,7 @@ public class FutureFilter implements Filter, Filter.Listener {
         if (onthrowMethod == null || onthrowInst == null) {
             throw new IllegalStateException("service:" + invoker.getUrl().getServiceKey() + " has a onthrow callback config , but no such " + (onthrowMethod == null ? "method" : "instance") + " found. url:" + invoker.getUrl());
         }
-        if (!onthrowMethod.isAccessible()) {
-            onthrowMethod.setAccessible(true);
-        }
+        ReflectUtils.makeAccessible(onthrowMethod);
         Class<?>[] rParaTypes = onthrowMethod.getParameterTypes();
         if (rParaTypes[0].isAssignableFrom(exception.getClass())) {
             try {
@@ -187,7 +172,6 @@ public class FutureFilter implements Filter, Filter.Listener {
                 } else {
                     params = new Object[]{exception};
                 }
-                // 调用方法
                 onthrowMethod.invoke(onthrowInst, params);
             } catch (Throwable e) {
                 logger.error(invocation.getMethodName() + ".call back method invoke error . callback method :" + onthrowMethod + ", url:" + invoker.getUrl(), e);

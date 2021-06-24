@@ -30,9 +30,6 @@ public abstract class AbstractExporter<T> implements Exporter<T> {
 
     private final Invoker<T> invoker;
 
-    /**
-     * 是否取消暴露服务
-     */
     private volatile boolean unexported = false;
 
     public AbstractExporter(Invoker<T> invoker) {
@@ -54,14 +51,19 @@ public abstract class AbstractExporter<T> implements Exporter<T> {
     }
 
     @Override
-    public void unexport() {
-        // 标记已经取消暴露
+    final public void unexport() {
         if (unexported) {
             return;
         }
         unexported = true;
-        // 销毁
         getInvoker().destroy();
+        afterUnExport();
+    }
+
+    /**
+     * subclasses need to override this method to destroy resources.
+     */
+    public void afterUnExport() {
     }
 
     @Override

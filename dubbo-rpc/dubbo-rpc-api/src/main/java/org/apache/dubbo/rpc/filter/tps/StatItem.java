@@ -64,7 +64,7 @@ class StatItem {
             lastResetTime = now;
         }
 
-        if (token.sum() < 0) {
+        if (token.sum() <= 0) {
             return false;
         }
         token.decrement();

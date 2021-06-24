@@ -31,6 +31,8 @@ import com.googlecode.jsonrpc4j.JsonRpcServer;
 import com.googlecode.jsonrpc4j.spring.JsonProxyFactoryBean;
 import org.apache.dubbo.rpc.service.GenericService;
 import org.apache.dubbo.rpc.support.ProtocolUtils;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.remoting.RemoteAccessException;
 import org.springframework.remoting.support.RemoteInvocation;
 
@@ -79,7 +81,6 @@ public class HttpProtocol extends AbstractProxyProtocol {
         public void handle(HttpServletRequest request, HttpServletResponse response)
                 throws ServletException {
             String uri = request.getRequestURI();
-            // 获得 HttpInvokerServiceExporter 对象
             JsonRpcServer skeleton = skeletonMap.get(uri);
             if (cors) {
                 response.setHeader(ACCESS_CONTROL_ALLOW_ORIGIN_HEADER, "*");
@@ -92,7 +93,6 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
                 RpcContext.getContext().setRemoteAddress(request.getRemoteAddr(), request.getRemotePort());
                 try {
-                    // 执行调用
                     skeleton.handle(request.getInputStream(), response.getOutputStream());
                 } catch (Throwable e) {
                     throw new ServletException(e);
@@ -106,9 +106,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
     @Override
     protected <T> Runnable doExport(final T impl, Class<T> type, URL url) throws RpcException {
-        // 获得服务器地址
         String addr = getAddr(url);
-        // 获得 HttpServer 对象。若不存在，进行创建。
         ProtocolServer protocolServer = serverMap.get(addr);
         if (protocolServer == null) {
             RemotingServer remotingServer = httpBinder.bind(url, new InternalHandler(url.getParameter("cors", false)));
@@ -116,10 +114,10 @@ public class HttpProtocol extends AbstractProxyProtocol {
         }
         final String path = url.getAbsolutePath();
         final String genericPath = path + "/" + GENERIC_KEY;
-        JsonRpcServer skeleton = new JsonRpcServer(impl, type);
-        JsonRpcServer genericServer = new JsonRpcServer(impl, GenericService.class);
-        // 创建 HttpInvokerServiceExporter 对象
-        // 添加到 skeletonMap 中
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        JsonRpcServer skeleton = new JsonRpcServer(mapper, impl, type);
+        JsonRpcServer genericServer = new JsonRpcServer(mapper, impl, GenericService.class);
         skeletonMap.put(path, skeleton);
         skeletonMap.put(genericPath, genericServer);
         return () -> {

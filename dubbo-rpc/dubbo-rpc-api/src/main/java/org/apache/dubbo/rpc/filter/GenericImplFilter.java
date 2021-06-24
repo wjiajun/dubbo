@@ -113,7 +113,7 @@ public class GenericImplFilter implements Filter, Filter.Listener {
             if (ProtocolUtils.isJavaGenericSerialization(generic)) {
 
                 for (Object arg : args) {
-                    if (!(byte[].class == arg.getClass())) {
+                    if (byte[].class != arg.getClass()) {
                         error(generic, byte[].class.getName(), arg.getClass().getName());
                     }
                 }
@@ -197,9 +197,7 @@ public class GenericImplFilter implements Filter, Filter.Listener {
                     if (targetException != null) {
                         try {
                             Field field = Throwable.class.getDeclaredField("detailMessage");
-                            if (!field.isAccessible()) {
-                                field.setAccessible(true);
-                            }
+                            ReflectUtils.makeAccessible(field);
                             field.set(targetException, exception.getExceptionMessage());
                         } catch (Throwable e) {
                             logger.warn(e.getMessage(), e);

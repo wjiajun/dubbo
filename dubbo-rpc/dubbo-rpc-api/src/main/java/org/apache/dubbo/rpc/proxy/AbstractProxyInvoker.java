@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
- * InvokerWrapper
+ * This Invoker works on provider side, delegates RPC to interface implementation.
  */
 public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
     Logger logger = LoggerFactory.getLogger(AbstractProxyInvoker.class);
@@ -90,9 +90,9 @@ public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
         try {
             // 同步
             Object value = doInvoke(proxy, invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());
-			CompletableFuture<Object> future = wrapWithFuture(value);
+            CompletableFuture<Object> future = wrapWithFuture(value);
             CompletableFuture<AppResponse> appResponseFuture = future.handle((obj, t) -> {
-                AppResponse result = new AppResponse();
+                AppResponse result = new AppResponse(invocation);
                 if (t != null) {
                     if (t instanceof CompletionException) {
                         result.setException(t.getCause());

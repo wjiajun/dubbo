@@ -16,6 +16,10 @@
  */
 package org.apache.dubbo.common.bytecode;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import javassist.ClassPool;
+import javassist.CtMethod;
 import org.apache.dubbo.common.utils.ClassUtils;
 import org.apache.dubbo.common.utils.ReflectUtils;
 
@@ -104,7 +108,6 @@ public abstract class Wrapper {
      * @return Wrapper instance(not null).
      */
     public static Wrapper getWrapper(Class<?> c) {
-        // 判断是否继承 ClassGenerator.DC.class ，如果是，拿到父类，避免重复包装
         while (ClassGenerator.isDynamicClass(c)) // can not wrapper on dynamic class.
         {
             c = c.getSuperclass();
@@ -114,8 +117,7 @@ public abstract class Wrapper {
             return OBJECT_WRAPPER;
         }
 
-        // 从缓存中获得 Wrapper 对象
-        return WRAPPER_MAP.computeIfAbsent(c, key -> makeWrapper(key));
+        return WRAPPER_MAP.computeIfAbsent(c, Wrapper::makeWrapper);
     }
 
     private static Wrapper makeWrapper(Class<?> c) {
@@ -152,10 +154,32 @@ public abstract class Wrapper {
             pts.put(fn, ft);
         }
 
-        Method[] methods = c.getMethods();
+        final ClassPool classPool = new ClassPool(ClassPool.getDefault());
+        classPool.appendClassPath(new CustomizedLoaderClassPath(cl));
+
+        List<String> allMethod = new ArrayList<>();
+        try {
+            final CtMethod[] ctMethods = classPool.get(c.getName()).getMethods();
+            for (CtMethod method : ctMethods) {
+                allMethod.add(ReflectUtils.getDesc(method));
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        Method[] methods = Arrays.stream(c.getMethods())
+                                 .filter(method -> allMethod.contains(ReflectUtils.getDesc(method)))
+                                 .collect(Collectors.toList())
+                                 .toArray(new Method[] {});
         // get all public method.
         boolean hasMethod = hasMethods(methods);
         if (hasMethod) {
+            Map<String, Integer> sameNameMethodCount = new HashMap<>((int) (methods.length / 0.75f) + 1);
+            for (Method m : methods) {
+                sameNameMethodCount.compute(m.getName(),
+                        (key, oldValue) -> oldValue == null ? 1 : oldValue + 1);
+            }
+
             c3.append(" try{");
             for (Method m : methods) {
                 //ignore Object's method.
@@ -168,14 +192,8 @@ public abstract class Wrapper {
                 int len = m.getParameterTypes().length;
                 c3.append(" && ").append(" $3.length == ").append(len);
 
-                boolean override = false;
-                for (Method m2 : methods) {
-                    if (m != m2 && m.getName().equals(m2.getName())) {
-                        override = true;
-                        break;
-                    }
-                }
-                if (override) {
+                boolean overload = sameNameMethodCount.get(m.getName()) > 1;
+                if (overload) {
                     if (len > 0) {
                         for (int l = 0; l < len; l++) {
                             c3.append(" && ").append(" $3[").append(l).append("].getName().equals(\"")
@@ -228,7 +246,7 @@ public abstract class Wrapper {
             }
         }
         c1.append(" throw new " + NoSuchPropertyException.class.getName() + "(\"Not found property \\\"\"+$2+\"\\\" field or setter method in class " + c.getName() + ".\"); }");
-        c2.append(" throw new " + NoSuchPropertyException.class.getName() + "(\"Not found property \\\"\"+$2+\"\\\" field or setter method in class " + c.getName() + ".\"); }");
+        c2.append(" throw new " + NoSuchPropertyException.class.getName() + "(\"Not found property \\\"\"+$2+\"\\\" field or getter method in class " + c.getName() + ".\"); }");
 
         // make class
         long id = WRAPPER_CLASS_COUNTER.getAndIncrement();
@@ -265,7 +283,7 @@ public abstract class Wrapper {
             for (Method m : ms.values()) {
                 wc.getField("mts" + ix++).set(null, m.getParameterTypes());
             }
-            return (Wrapper) wc.newInstance();
+            return (Wrapper) wc.getDeclaredConstructor().newInstance();
         } catch (RuntimeException e) {
             throw e;
         } catch (Throwable e) {
@@ -445,7 +463,7 @@ public abstract class Wrapper {
     /**
      * invoke method.
      *
-     * @param instance instance.  被调用的对象
+     * @param instance instance.
      * @param mn       method name.
      * @param types
      * @param args     argument array.

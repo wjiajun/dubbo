@@ -26,6 +26,7 @@ import org.apache.dubbo.common.utils.UrlUtils;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.cluster.Constants;
 import org.apache.dubbo.rpc.cluster.router.AbstractRouter;
 
 import java.text.ParseException;
@@ -50,26 +51,19 @@ import static org.apache.dubbo.rpc.cluster.Constants.RUNTIME_KEY;
 
 /**
  * ConditionRouter
- *
+ * It supports the conditional routing configured by "override://", in 2.6.x,
+ * refer to https://dubbo.apache.org/en/docs/v2.7/user/examples/routing-rule/ .
+ * For 2.7.x and later, please refer to {@link org.apache.dubbo.rpc.cluster.router.condition.config.ServiceRouter}
+ * and {@link org.apache.dubbo.rpc.cluster.router.condition.config.AppRouter}
+ * refer to https://dubbo.apache.org/zh/docs/v2.7/user/examples/routing-rule/ .
  */
 public class ConditionRouter extends AbstractRouter {
     public static final String NAME = "condition";
 
     private static final Logger logger = LoggerFactory.getLogger(ConditionRouter.class);
-    /**
-     * 分组正则匹配，详细见 {@link #parseRule(String)} 方法
-     *
-     * 前 [] 为匹配，分隔符
-     * 后 [] 为匹配，内容
-     */
     protected static final Pattern ROUTE_PATTERN = Pattern.compile("([&!=,]*)\\s*([^&!=,\\s]+)");
-    /**
-     * 消费者匹配条件集合，通过解析【条件表达式 rule 的 `=>` 之前半部分】
-     */
+    protected static Pattern ARGUMENTS_PATTERN = Pattern.compile("arguments\\[([0-9]+)\\]");
     protected Map<String, MatchPair> whenCondition;
-    /**
-     * 提供者地址列表的过滤条件，通过解析【条件表达式 rule 的 `=>` 之后半部分】
-     */
     protected Map<String, MatchPair> thenCondition;
 
     private boolean enabled;
@@ -77,7 +71,9 @@ public class ConditionRouter extends AbstractRouter {
     public ConditionRouter(String rule, boolean force, boolean enabled) {
         this.force = force;
         this.enabled = enabled;
-        this.init(rule);
+        if (enabled) {
+            this.init(rule);
+        }
     }
 
     public ConditionRouter(URL url) {
@@ -85,12 +81,13 @@ public class ConditionRouter extends AbstractRouter {
         this.priority = url.getParameter(PRIORITY_KEY, 0);
         this.force = url.getParameter(FORCE_KEY, false);
         this.enabled = url.getParameter(ENABLED_KEY, true);
-        init(url.getParameterAndDecoded(RULE_KEY));
+        if (enabled) {
+            init(url.getParameterAndDecoded(RULE_KEY));
+        }
     }
 
     public void init(String rule) {
         try {
-            // 拆分条件变大时为 when 和 then 两部分
             if (rule == null || rule.trim().length() == 0) {
                 throw new IllegalArgumentException("Illegal route rule!");
             }
@@ -98,9 +95,7 @@ public class ConditionRouter extends AbstractRouter {
             int i = rule.indexOf("=>");
             String whenRule = i < 0 ? null : rule.substring(0, i).trim();
             String thenRule = i < 0 ? rule.trim() : rule.substring(i + 2).trim();
-            // 解析 `whenCondition`
             Map<String, MatchPair> when = StringUtils.isBlank(whenRule) || "true".equals(whenRule) ? new HashMap<String, MatchPair>() : parseRule(whenRule);
-            // 解析 `thenCondition`
             Map<String, MatchPair> then = StringUtils.isBlank(thenRule) || "false".equals(thenRule) ? null : parseRule(thenRule);
             // NOTE: It should be determined on the business level whether the `When condition` can be empty or not.
             this.whenCondition = when;
@@ -110,9 +105,8 @@ public class ConditionRouter extends AbstractRouter {
         }
     }
 
-    private static Map<String, MatchPair>  parseRule(String rule)
+    private static Map<String, MatchPair> parseRule(String rule)
             throws ParseException {
-        System.out.println("rule: " + rule);
         Map<String, MatchPair> condition = new HashMap<String, MatchPair>();
         if (StringUtils.isBlank(rule)) {
             return condition;
@@ -184,7 +178,6 @@ public class ConditionRouter extends AbstractRouter {
     @Override
     public <T> List<Invoker<T>> route(List<Invoker<T>> invokers, URL url, Invocation invocation)
             throws RpcException {
-        // 为空，直接返回空 Invoker 集合
         if (!enabled) {
             return invokers;
         }
@@ -193,26 +186,21 @@ public class ConditionRouter extends AbstractRouter {
             return invokers;
         }
         try {
-            // 不匹配 `whenCondition` ，直接返回 `invokers` 集合，因为不需要走 `whenThen` 的匹配
             if (!matchWhen(url, invocation)) {
                 return invokers;
             }
             List<Invoker<T>> result = new ArrayList<Invoker<T>>();
-            // `whenThen` 为空，则返回空 Invoker 集合
             if (thenCondition == null) {
                 logger.warn("The current consumer in the service blacklist. consumer: " + NetUtils.getLocalHost() + ", service: " + url.getServiceKey());
                 return result;
             }
-            // 使用 `whenThen` ，匹配 `invokers` 集合。若符合，添加到 `result` 中
             for (Invoker<T> invoker : invokers) {
                 if (matchThen(invoker.getUrl(), url)) {
                     result.add(invoker);
                 }
             }
-            // 若 `result` 非空，返回它
             if (!result.isEmpty()) {
                 return result;
-            // 如果 `force=true` ，代表强制执行，返回空 Invoker 集合
             } else if (force) {
                 logger.warn("The route result is empty and force execute. consumer: " + NetUtils.getLocalHost() + ", service: " + url.getServiceKey() + ", router: " + url.getParameterAndDecoded(RULE_KEY));
                 return result;
@@ -220,7 +208,6 @@ public class ConditionRouter extends AbstractRouter {
         } catch (Throwable t) {
             logger.error("Failed to execute condition router rule: " + getUrl() + ", invokers: " + invokers + ", cause: " + t.getMessage(), t);
         }
-        // 如果 `force=false` ，代表不强制执行，返回 `invokers` 集合，即忽略路由规则
         return invokers;
     }
 
@@ -246,10 +233,19 @@ public class ConditionRouter extends AbstractRouter {
 
     private boolean matchCondition(Map<String, MatchPair> condition, URL url, URL param, Invocation invocation) {
         Map<String, String> sample = url.toMap();
-        boolean result = false;// 是否匹配
+        boolean result = false;
         for (Map.Entry<String, MatchPair> matchPair : condition.entrySet()) {
-            // 获得条件属性
             String key = matchPair.getKey();
+
+            if (key.startsWith(Constants.ARGUMENTS)) {
+                if (!matchArguments(matchPair, invocation)) {
+                    return false;
+                } else {
+                    result = true;
+                    continue;
+                }
+            }
+
             String sampleValue;
             //get real invoked method name from invocation
             if (invocation != null && (METHOD_KEY.equals(key) || METHODS_KEY.equals(key))) {
@@ -264,16 +260,15 @@ public class ConditionRouter extends AbstractRouter {
                     sampleValue = sample.get(key);
                 }
             }
-            // 匹配条件值
             if (sampleValue != null) {
-                if (!matchPair.getValue().isMatch(sampleValue, param)) {// 返回不匹配
+                if (!matchPair.getValue().isMatch(sampleValue, param)) {
                     return false;
                 } else {
                     result = true;
                 }
             } else {
                 //not pass the condition
-                if (!matchPair.getValue().matches.isEmpty()) {// 无条件值，但是有匹配条件 `matches` ，则返回不匹配
+                if (!matchPair.getValue().matches.isEmpty()) {
                     return false;
                 } else {
                     result = true;
@@ -283,25 +278,50 @@ public class ConditionRouter extends AbstractRouter {
         return result;
     }
 
+    /**
+     * analysis the arguments in the rule.
+     * Examples would be like this:
+     * "arguments[0]=1", whenCondition is that the first argument is equal to '1'.
+     * "arguments[1]=a", whenCondition is that the second argument is equal to 'a'.
+     * @param matchPair
+     * @param invocation
+     * @return
+     */
+    public boolean matchArguments(Map.Entry<String, MatchPair> matchPair, Invocation invocation) {
+        try {
+            // split the rule
+            String key = matchPair.getKey();
+            String[] expressArray = key.split("\\.");
+            String argumentExpress = expressArray[0];
+            final Matcher matcher = ARGUMENTS_PATTERN.matcher(argumentExpress);
+            if (!matcher.find()) {
+                return false;
+            }
+
+            //extract the argument index
+            int index = Integer.parseInt(matcher.group(1));
+            if (index < 0 || index > invocation.getArguments().length) {
+                return false;
+            }
+
+            //extract the argument value
+            Object object = invocation.getArguments()[index];
+
+            if (matchPair.getValue().isMatch(String.valueOf(object), null)) {
+                return true;
+            }
+        } catch (Exception e) {
+            logger.warn("Arguments match failed, matchPair[]" + matchPair + "] invocation[" + invocation + "]", e);
+        }
+
+        return false;
+    }
+
     protected static final class MatchPair {
-        /**
-         * 匹配的值集合
-         */
         final Set<String> matches = new HashSet<String>();
-        /**
-         * 不匹配的值集合
-         */
         final Set<String> mismatches = new HashSet<String>();
 
-        /**
-         * 判断 value 是否匹配 matches + mismatches
-         *
-         * @param value 值
-         * @param param URL
-         * @return 是否匹配
-         */
         private boolean isMatch(String value, URL param) {
-            // 只匹配 matches
             if (!matches.isEmpty() && mismatches.isEmpty()) {
                 for (String match : matches) {
                     if (UrlUtils.isMatchGlobPattern(match, value, param)) {
@@ -311,7 +331,6 @@ public class ConditionRouter extends AbstractRouter {
                 return false;
             }
 
-            // 只匹配 mismatches
             if (!mismatches.isEmpty() && matches.isEmpty()) {
                 for (String mismatch : mismatches) {
                     if (UrlUtils.isMatchGlobPattern(mismatch, value, param)) {
@@ -321,7 +340,6 @@ public class ConditionRouter extends AbstractRouter {
                 return true;
             }
 
-            // 匹配 mismatches + matches
             if (!matches.isEmpty() && !mismatches.isEmpty()) {
                 //when both mismatches and matches contain the same value, then using mismatches first
                 for (String mismatch : mismatches) {

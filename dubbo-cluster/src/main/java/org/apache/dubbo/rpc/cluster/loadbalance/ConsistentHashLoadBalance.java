@@ -17,13 +17,10 @@
 package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.io.Bytes;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.support.RpcUtils;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -67,49 +64,29 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
     private static final class ConsistentHashSelector<T> {
 
-        /**
-         * 虚拟节点与 Invoker 的映射关系
-         */
         private final TreeMap<Long, Invoker<T>> virtualInvokers;
 
-        /**
-         * 每个Invoker 对应的虚拟节点数
-         */
         private final int replicaNumber;
 
-        /**
-         * 定义哈希值
-         */
         private final int identityHashCode;
 
-        /**
-         * 取值参数位置数组
-         */
         private final int[] argumentIndex;
 
         ConsistentHashSelector(List<Invoker<T>> invokers, String methodName, int identityHashCode) {
             this.virtualInvokers = new TreeMap<Long, Invoker<T>>();
-            // 设置 identityHashCode
             this.identityHashCode = identityHashCode;
             URL url = invokers.get(0).getUrl();
-            // 初始化 replicaNumber
             this.replicaNumber = url.getMethodParameter(methodName, HASH_NODES, 160);
-            // 初始化 argumentIndex
             String[] index = COMMA_SPLIT_PATTERN.split(url.getMethodParameter(methodName, HASH_ARGUMENTS, "0"));
             argumentIndex = new int[index.length];
             for (int i = 0; i < index.length; i++) {
                 argumentIndex[i] = Integer.parseInt(index[i]);
             }
-            // 初始化 virtualInvokers
             for (Invoker<T> invoker : invokers) {
                 String address = invoker.getUrl().getAddress();
-                // 每四个虚拟结点为一组
                 for (int i = 0; i < replicaNumber / 4; i++) {
-                    // 这组虚拟结点得到惟一名
-                    byte[] digest = md5(address + i);
-                    // Md5是一个16字节长度的数组，将16字节的数组每四个字节一组，分别对应一个虚拟结点，这就是为什么上面把虚拟结点四个划分一组的原因
+                    byte[] digest = Bytes.getMD5(address + i);
                     for (int h = 0; h < 4; h++) {
-                        // 对于每四个字节，组成一个long值数值，做为这个虚拟节点的在环中的惟一key
                         long m = hash(digest, h);
                         virtualInvokers.put(m, invoker);
                     }
@@ -119,7 +96,7 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
         public Invoker<T> select(Invocation invocation) {
             String key = toKey(invocation.getArguments());
-            byte[] digest = md5(key);
+            byte[] digest = Bytes.getMD5(key);
             return selectForKey(hash(digest, 0));
         }
 
@@ -148,20 +125,6 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
                     | (digest[number * 4] & 0xFF))
                     & 0xFFFFFFFFL;
         }
-
-        private byte[] md5(String value) {
-            MessageDigest md5;
-            try {
-                md5 = MessageDigest.getInstance("MD5");
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException(e.getMessage(), e);
-            }
-            md5.reset();
-            byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-            md5.update(bytes);
-            return md5.digest();
-        }
-
     }
 
 }

@@ -67,6 +67,11 @@ public class MockClusterInvoker<T> implements ClusterInvoker<T> {
     }
 
     @Override
+    public boolean isDestroyed() {
+        return directory.isDestroyed();
+    }
+
+    @Override
     public boolean isAvailable() {
         return directory.isAvailable();
     }
@@ -172,7 +177,7 @@ public class MockClusterInvoker<T> implements ClusterInvoker<T> {
     /**
      * Return MockInvoker
      * Contract：
-     * directory.list() will return a list of normal invokers if Constants.INVOCATION_NEED_MOCK is present in invocation, otherwise, a list of mock invokers will return.
+     * directory.list() will return a list of normal invokers if Constants.INVOCATION_NEED_MOCK is absent or not true in invocation, otherwise, a list of mock invokers will return.
      * if directory.list() returns more than one mock invoker, only one of them will be used.
      *
      * @param invocation
@@ -185,7 +190,7 @@ public class MockClusterInvoker<T> implements ClusterInvoker<T> {
             //Note the implicit contract (although the description is added to the interface declaration, but extensibility is a problem. The practice placed in the attachment needs to be improved)
             // 存在隐含契约(虽然在接口声明中增加描述，但扩展性会存在问题.同时放在 attachment 中的做法需要改进
             ((RpcInvocation) invocation).setAttachment(INVOCATION_NEED_MOCK, Boolean.TRUE.toString());
-            //directory will return a list of normal invokers if Constants.INVOCATION_NEED_MOCK is present in invocation, otherwise, a list of mock invokers will return.
+            //directory will return a list of normal invokers if Constants.INVOCATION_NEED_MOCK is absent or not true in invocation, otherwise, a list of mock invokers will return.
             try {
                 invokers = directory.list(invocation);
             } catch (RpcException e) {

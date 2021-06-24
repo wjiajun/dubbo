@@ -67,8 +67,8 @@ public class ExceptionFilter implements Filter, Filter.Listener {
                 try {
                     // 在方法签名上有声明，直接抛出
                     Method method = invoker.getInterface().getMethod(invocation.getMethodName(), invocation.getParameterTypes());
-                    Class<?>[] exceptionClassses = method.getExceptionTypes();
-                    for (Class<?> exceptionClass : exceptionClassses) {
+                    Class<?>[] exceptionClasses = method.getExceptionTypes();
+                    for (Class<?> exceptionClass : exceptionClasses) {
                         if (exception.getClass().equals(exceptionClass)) {
                             return;
                         }

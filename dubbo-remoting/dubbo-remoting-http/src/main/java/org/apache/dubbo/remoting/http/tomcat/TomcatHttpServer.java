@@ -31,17 +31,14 @@ import org.apache.catalina.startup.Tomcat;
 
 import java.io.File;
 
-import static org.apache.dubbo.common.constants.CommonConstants.THREADS_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_THREADS;
+import static org.apache.dubbo.common.constants.CommonConstants.THREADS_KEY;
 import static org.apache.dubbo.remoting.Constants.ACCEPTS_KEY;
 
 public class TomcatHttpServer extends AbstractHttpServer {
 
     private static final Logger logger = LoggerFactory.getLogger(TomcatHttpServer.class);
 
-    /**
-      * 内嵌的 Tomcat 对象
-      */
     private final Tomcat tomcat;
 
     private final URL url;
@@ -50,36 +47,33 @@ public class TomcatHttpServer extends AbstractHttpServer {
         super(url, handler);
 
         this.url = url;
-        // 注册 HttpHandler 到 DispatcherServlet 中
         DispatcherServlet.addHttpHandler(url.getPort(), handler);
-        // 创建内嵌的 Tomcat 对象
         String baseDir = new File(System.getProperty("java.io.tmpdir")).getAbsolutePath();
         tomcat = new Tomcat();
 
-        Connector connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
+        Connector connector = tomcat.getConnector();
         connector.setPort(url.getPort());
         connector.setProperty("maxThreads", String.valueOf(url.getParameter(THREADS_KEY, DEFAULT_THREADS)));
         connector.setProperty("maxConnections", String.valueOf(url.getParameter(ACCEPTS_KEY, -1)));
         connector.setProperty("URIEncoding", "UTF-8");
         connector.setProperty("connectionTimeout", "60000");
         connector.setProperty("maxKeepAliveRequests", "-1");
-        tomcat.setConnector(connector);
 
         tomcat.setBaseDir(baseDir);
         tomcat.setPort(url.getPort());
 
-        // 添加 DispatcherServlet 到 Tomcat 中
         Context context = tomcat.addContext("/", baseDir);
         Tomcat.addServlet(context, "dispatcher", new DispatcherServlet());
-        context.addServletMapping("/*", "dispatcher");
-        // 添加 ServletContext 对象，到 ServletManager 中
+        // Issue : https://github.com/apache/dubbo/issues/6418
+        // addServletMapping method will be removed since Tomcat 9
+        // context.addServletMapping("/*", "dispatcher");
+        context.addServletMappingDecoded("/*", "dispatcher");
         ServletManager.getInstance().addServletContext(url.getPort(), context.getServletContext());
 
         // tell tomcat to fail on startup failures.
         System.setProperty("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE", "true");
 
         try {
-            // 启动 Tomcat
             tomcat.start();
         } catch (LifecycleException e) {
             throw new IllegalStateException("Failed to start tomcat server at " + url.getAddress(), e);
@@ -88,13 +82,10 @@ public class TomcatHttpServer extends AbstractHttpServer {
 
     @Override
     public void close() {
-        // 标记关闭
         super.close();
 
-        // 移除 ServletContext 对象
         ServletManager.getInstance().removeServletContext(url.getPort());
 
-        // 关闭 Tomcat
         try {
             tomcat.stop();
         } catch (Exception e) {

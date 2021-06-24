@@ -23,16 +23,19 @@ import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.serialize.ObjectInput;
 import org.apache.dubbo.common.serialize.ObjectOutput;
+import org.apache.dubbo.common.serialize.Serialization;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.exchange.Response;
 import org.apache.dubbo.remoting.exchange.codec.ExchangeCodec;
 import org.apache.dubbo.remoting.transport.CodecSupport;
+import org.apache.dubbo.rpc.AppResponse;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcInvocation;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -49,33 +52,15 @@ import static org.apache.dubbo.rpc.protocol.dubbo.Constants.DEFAULT_DECODE_IN_IO
  */
 public class DubboCodec extends ExchangeCodec {
 
-    /**
-     * 协议名
-     */
     public static final String NAME = "dubbo";
-    /**
-     * 协议版本
-     */
     public static final String DUBBO_VERSION = Version.getProtocolVersion();
-    /**
-     * 响应 - 异常
-     */
     public static final byte RESPONSE_WITH_EXCEPTION = 0;
-    /**
-     * 响应 - 正常（空返回）
-     */
     public static final byte RESPONSE_VALUE = 1;
-    /**
-     * 响应 - 正常（有返回）
-     */
     public static final byte RESPONSE_NULL_VALUE = 2;
     public static final byte RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS = 3;
     public static final byte RESPONSE_VALUE_WITH_ATTACHMENTS = 4;
     public static final byte RESPONSE_NULL_VALUE_WITH_ATTACHMENTS = 5;
     public static final Object[] EMPTY_OBJECT_ARRAY = new Object[0];
-    /**
-     * 方法参数 - 空（类型）
-     */
     public static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
     private static final Logger log = LoggerFactory.getLogger(DubboCodec.class);
 
@@ -83,30 +68,28 @@ public class DubboCodec extends ExchangeCodec {
     protected Object decodeBody(Channel channel, InputStream is, byte[] header) throws IOException {
         byte flag = header[2], proto = (byte) (flag & SERIALIZATION_MASK);
         // get request id.
-        // 获得请求||响应编号
         long id = Bytes.bytes2long(header, 4);
-        // 若是心跳事件，进行设置
         if ((flag & FLAG_REQUEST) == 0) {
             // decode response.
             Response res = new Response(id);
-            // 解析响应
             if ((flag & FLAG_EVENT) != 0) {
                 res.setEvent(true);
             }
-            // 设置状态
             // get status.
             byte status = header[3];
             res.setStatus(status);
             try {
-                // 正常响应状态
                 if (status == Response.OK) {
                     Object data;
-                    // 解码心跳事件
-                    // 解码其它事件
                     if (res.isEvent()) {
-                        ObjectInput in = CodecSupport.deserialize(channel.getUrl(), is, proto);
-                        data = decodeEventData(channel, in);
-                    // 解码普通响应
+                        byte[] eventPayload = CodecSupport.getPayload(is);
+                        if (CodecSupport.isHeartBeat(eventPayload, proto)) {
+                            // heart beat response data is always null;
+                            data = null;
+                        } else {
+                            ObjectInput in = CodecSupport.deserialize(channel.getUrl(), new ByteArrayInputStream(eventPayload), proto);
+                            data = decodeEventData(channel, in, eventPayload);
+                        }
                     } else {
                         DecodeableRpcResult result;
                         if (channel.getUrl().getParameter(DECODE_IN_IO_THREAD_KEY, DEFAULT_DECODE_IN_IO_THREAD)) {
@@ -137,26 +120,26 @@ public class DubboCodec extends ExchangeCodec {
             // decode request.
             Request req = new Request(id);
             req.setVersion(Version.getProtocolVersion());
-            // 是否需要响应
             req.setTwoWay((flag & FLAG_TWOWAY) != 0);
-            // 若是心跳事件，进行设置
             if ((flag & FLAG_EVENT) != 0) {
                 req.setEvent(true);
             }
             try {
                 Object data;
-                // 解码心跳事件
-                // 解码其它事件
                 if (req.isEvent()) {
-                    ObjectInput in = CodecSupport.deserialize(channel.getUrl(), is, proto);
-                    data = decodeEventData(channel, in);
+                    byte[] eventPayload = CodecSupport.getPayload(is);
+                    if (CodecSupport.isHeartBeat(eventPayload, proto)) {
+                        // heart beat response data is always null;
+                        data = null;
+                    } else {
+                        ObjectInput in = CodecSupport.deserialize(channel.getUrl(), new ByteArrayInputStream(eventPayload), proto);
+                        data = decodeEventData(channel, in, eventPayload);
+                    }
                 } else {
                     DecodeableRpcInvocation inv;
-                    // 在通信框架（例如，Netty）的 IO 线程，解码
                     if (channel.getUrl().getParameter(DECODE_IN_IO_THREAD_KEY, DEFAULT_DECODE_IN_IO_THREAD)) {
                         inv = new DecodeableRpcInvocation(channel, req, is, proto);
                         inv.decode();
-                    // 在 Dubbo ThreadPool 线程，解码，使用 DecodeHandler
                     } else {
                         inv = new DecodeableRpcInvocation(channel, req,
                                 new UnsafeByteArrayInputStream(readMessageData(is)), proto);
@@ -200,7 +183,6 @@ public class DubboCodec extends ExchangeCodec {
     protected void encodeRequestData(Channel channel, ObjectOutput out, Object data, String version) throws IOException {
         RpcInvocation inv = (RpcInvocation) data;
 
-        // 写入 `dubbo` `path` `version`
         out.writeUTF(version);
         // https://github.com/apache/dubbo/issues/6138
         String serviceName = inv.getAttachment(INTERFACE_KEY);
@@ -210,7 +192,6 @@ public class DubboCodec extends ExchangeCodec {
         out.writeUTF(serviceName);
         out.writeUTF(inv.getAttachment(VERSION_KEY));
 
-        // 写入方法、方法签名、方法参数集合
         out.writeUTF(inv.getMethodName());
         out.writeUTF(inv.getParameterTypesDesc());
         Object[] args = inv.getArguments();
@@ -219,7 +200,6 @@ public class DubboCodec extends ExchangeCodec {
                 out.writeObject(encodeInvocationArgument(channel, inv, i));
             }
         }
-        // 写入隐式传参集合
         out.writeAttachments(inv.getObjectAttachments());
     }
 
@@ -229,12 +209,10 @@ public class DubboCodec extends ExchangeCodec {
         // currently, the version value in Response records the version of Request
         boolean attach = Version.isSupportResponseAttachment(version);
         Throwable th = result.getException();
-        // 正常
         if (th == null) {
             Object ret = result.getValue();
             if (ret == null) {
                 out.writeByte(attach ? RESPONSE_NULL_VALUE_WITH_ATTACHMENTS : RESPONSE_NULL_VALUE);
-            // 有返回
             } else {
                 out.writeByte(attach ? RESPONSE_VALUE_WITH_ATTACHMENTS : RESPONSE_VALUE);
                 out.writeObject(ret);
@@ -250,4 +228,21 @@ public class DubboCodec extends ExchangeCodec {
             out.writeAttachments(result.getObjectAttachments());
         }
     }
+
+    @Override
+    protected Serialization getSerialization(Channel channel, Request req) {
+        if (!(req.getData() instanceof Invocation)) {
+            return super.getSerialization(channel, req);
+        }
+        return DubboCodecSupport.getRequestSerialization(channel.getUrl(), (Invocation) req.getData());
+    }
+
+    @Override
+    protected Serialization getSerialization(Channel channel, Response res) {
+        if (!(res.getResult() instanceof AppResponse)) {
+            return super.getSerialization(channel, res);
+        }
+        return DubboCodecSupport.getResponseSerialization(channel.getUrl(), (AppResponse) res.getResult());
+    }
+
 }
