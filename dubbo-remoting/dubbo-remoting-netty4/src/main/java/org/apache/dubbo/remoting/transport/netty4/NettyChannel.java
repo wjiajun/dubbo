@@ -153,7 +153,7 @@ final class NettyChannel extends AbstractChannel {
      * Send message by netty and whether to wait the completion of the send.
      *
      * @param message message that need send.
-     * @param sent    whether to ack async-sent
+     * @param sent    whether to ack async-sentgit
      * @throws RemotingException throw RemotingException if wait until timeout or any exception thrown by method body that surrounded by try-catch.
      */
     @Override
