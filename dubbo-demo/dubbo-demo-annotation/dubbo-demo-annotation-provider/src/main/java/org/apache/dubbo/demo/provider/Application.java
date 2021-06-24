@@ -28,7 +28,7 @@ public class Application {
     public static void main(String[] args) throws Exception {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(ProviderConfiguration.class);
         context.start();
-        System.in.read();
+        Thread.currentThread().join();
     }
 
     @Configuration
@@ -39,6 +39,7 @@ public class Application {
         public RegistryConfig registryConfig() {
             RegistryConfig registryConfig = new RegistryConfig();
             registryConfig.setAddress("zookeeper://127.0.0.1:2181");
+//            registryConfig.setAddress("zookeeper://10.109.45.88:2181");
             return registryConfig;
         }
     }

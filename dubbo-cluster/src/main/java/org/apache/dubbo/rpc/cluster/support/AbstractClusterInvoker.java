@@ -191,25 +191,24 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         if (CollectionUtils.isEmpty(invokers)) {
             return null;
         }
-        // 【第一种】如果只有一个 Invoker ，直接选择
+        // 1. 如果只有一个 Invoker ，直接选择
         if (invokers.size() == 1) {
             return invokers.get(0);
         }
-        // 【第二种】如果只有两个 Invoker ，退化成轮循
-        // 【第三种】使用 Loadbalance ，选择一个 Invoker 对象
+        // 2. 使用 Loadbalance ，选择一个 Invoker 对象
         Invoker<T> invoker = loadbalance.select(invokers, getUrl(), invocation);
 
         //If the `invoker` is in the  `selected` or invoker is unavailable && availablecheck is true, reselect.
         if ((selected != null && selected.contains(invoker))
                 || (!invoker.isAvailable() && getUrl() != null && availablecheck)) {
             try {
-                //【第四种】重选一个 Invoker 对象
+                // 3. 重选一个 Invoker 对象
                 Invoker<T> rInvoker = reselect(loadbalance, invocation, invokers, selected, availablecheck);
                 if (rInvoker != null) {
                     invoker = rInvoker;
                 } else {
                     //Check the index of current selected invoker, if it's not the last one, choose the one at index+1.
-                    // 【第五种】看下第一次选的位置，如果不是最后，选+1位置.
+                    // 4. 看下第一次选的位置，如果不是最后，选+1位置.
                     int index = invokers.indexOf(invoker);
                     try {
                         //Avoid collision
@@ -242,7 +241,6 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
                                 List<Invoker<T>> invokers, List<Invoker<T>> selected, boolean availablecheck) throws RpcException {
 
         //Allocating one in advance, this list is certain to be used.
-        // 预先分配一个，这个列表是一定会用到的.
         List<Invoker<T>> reselectInvokers = new ArrayList<>(
                 invokers.size() > 1 ? (invokers.size() - 1) : invokers.size());
 

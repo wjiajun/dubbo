@@ -17,6 +17,8 @@
 package org.apache.dubbo.demo.consumer.comp;
 
 import org.apache.dubbo.common.extension.ExtensionLoader;
+import org.apache.dubbo.config.annotation.DubboReference;
+import org.apache.dubbo.config.annotation.Method;
 import org.apache.dubbo.config.annotation.Reference;
 import org.apache.dubbo.demo.DemoService;
 
@@ -28,7 +30,10 @@ import java.util.concurrent.CompletableFuture;
 
 @Component("demoServiceComponent")
 public class DemoServiceComponent implements DemoService {
-    @Reference(mock = "return empty")
+
+    @DubboReference( connections = 3, methods = {
+//            @Method(name = "sayHello", timeout = 2000)
+    })
     private DemoService demoService;
 
     @Override
@@ -46,8 +51,8 @@ public class DemoServiceComponent implements DemoService {
         return null;
     }
 
-    public static void main(String[] args) {
-        Protocol dubbo = ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("dubbo");
-        System.out.println();
-    }
+//    public static void main(String[] args) {
+//        Protocol dubbo = ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("dubbo");
+//        System.out.println();
+//    }
 }

@@ -71,7 +71,7 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
             final int forks = getUrl().getParameter(FORKS_KEY, DEFAULT_FORKS);
             // 获得调用超时时间，默认为 DEFAULT_TIMEOUT = 1000 毫秒
             final int timeout = getUrl().getParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
-            // 若最大并行书小于等于 0，或者大于 invokers 的数量，直接使用 invokers
+            // 若最大并行数小于等于 0，或者大于 invokers 的数量，直接使用 invokers
             if (forks <= 0 || forks >= invokers.size()) {
                 selected = invokers;
             } else {

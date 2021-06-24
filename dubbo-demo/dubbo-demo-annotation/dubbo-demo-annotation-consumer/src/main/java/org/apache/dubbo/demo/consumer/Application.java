@@ -37,11 +37,12 @@ public class Application {
         DemoService service = context.getBean("demoServiceComponent", DemoServiceComponent.class);
         System.out.println("第一次调用................");
         String hello = service.sayHello("world");
-        Thread.sleep(5000);
-        System.out.println("第二次调用................");
-        String s = service.sayHello(Lists.newArrayList("123"));
-        System.out.println("result :" + hello);
-        System.out.println("result1 :" + s);
+//        Thread.sleep(5000);
+//        System.out.println("第二次调用................");
+//        String s = service.sayHello(Lists.newArrayList("123"));
+//        System.out.println("result :" + hello);
+//        System.out.println("result1 :" + s);
+        Thread.currentThread().join();
     }
 
     @Configuration

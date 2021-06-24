@@ -16,7 +16,6 @@
  */
 package org.apache.dubbo.rpc.filter;
 
-import com.alibaba.fastjson.JSONObject;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.Activate;
@@ -45,9 +44,6 @@ public class ExecuteLimitFilter implements Filter, Filter.Listener {
         URL url = invoker.getUrl();
         String methodName = invocation.getMethodName();
         int max = url.getMethodParameter(methodName, EXECUTES_KEY, 0);
-        System.out.println("==================================");
-        System.out.println(max);
-        System.out.println("==================================");
         if (!RpcStatus.beginCount(url, methodName, max)) {
             throw new RpcException(RpcException.LIMIT_EXCEEDED_EXCEPTION,
                     "Failed to invoke method " + invocation.getMethodName() + " in provider " +

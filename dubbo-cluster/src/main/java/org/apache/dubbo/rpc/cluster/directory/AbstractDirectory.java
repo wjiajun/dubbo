@@ -39,9 +39,6 @@ import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
  */
 public abstract class AbstractDirectory<T> implements Directory<T> {
 
-    // logger
-    private static final Logger logger = LoggerFactory.getLogger(AbstractDirectory.class);
-
     /**
      * 注册中心 URL
      */
@@ -54,8 +51,6 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
 
     /**
      * 消费者 URL
-     *
-     * 若未显示调用 {@link #AbstractDirectory(URL, URL, List)} 构造方法，consumerUrl 等于 {@link #url}
      */
     private volatile URL consumerUrl;
 

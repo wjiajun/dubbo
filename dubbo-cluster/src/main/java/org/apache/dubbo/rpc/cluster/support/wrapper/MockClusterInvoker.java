@@ -87,18 +87,18 @@ public class MockClusterInvoker<T> implements ClusterInvoker<T> {
 
         // 获得 "mock" 配置项，有多种配置方式
         String value = getUrl().getMethodParameter(invocation.getMethodName(), MOCK_KEY, Boolean.FALSE.toString()).trim();
-        //【第一种】无 mock
+        // 1.无 mock
         if (value.length() == 0 || "false".equalsIgnoreCase(value)) {
             //no mock
             result = this.invoker.invoke(invocation);
-        //【第二种】强制服务降级
+        //2. 强制服务降级
         } else if (value.startsWith("force")) {
             if (logger.isWarnEnabled()) {
                 logger.warn("force-mock: " + invocation.getMethodName() + " force-mock enabled , url : " + getUrl());
             }
             //force:direct mock
             result = doMockInvoke(invocation, null);
-        // 【第三种】失败服务降级
+        // 3. 失败服务降级
         } else {
             //fail-mock
             try {

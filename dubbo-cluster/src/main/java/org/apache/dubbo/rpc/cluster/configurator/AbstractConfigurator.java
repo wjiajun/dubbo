@@ -64,7 +64,6 @@ public abstract class AbstractConfigurator implements Configurator {
     @Override
     public URL configure(URL url) {
         // If override url is not enabled or is invalid, just return.
-        // 配置规则，URL 带有端口( port )，意图是控制提供者机器。可以在提供端生效 也可以在消费端生效
         if (!configuratorUrl.getParameter(ENABLED_KEY, true) || configuratorUrl.getHost() == null || url == null || url.getHost() == null) {
             return url;
         }
@@ -76,10 +75,8 @@ public abstract class AbstractConfigurator implements Configurator {
             String currentSide = url.getParameter(SIDE_KEY);
             String configuratorSide = configuratorUrl.getParameter(SIDE_KEY);
             if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) {
-                // NetUtils.getLocalHost是消费端注册到zk的消费者地址
                 url = configureIfMatch(NetUtils.getLocalHost(), url);
             } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) && url.getPort() == configuratorUrl.getPort()) {
-                // 控制所有提供端，地址必定是0.0.0.0，否则就要配端口从而执行上面的if分支了
                 url = configureIfMatch(url.getHost(), url);
             }
         }
